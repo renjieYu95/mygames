@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>1-Bit Flashlight — 手电筒怪谈</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #090a0c;
+      --fg-color: #f4f4f6;
+      --accent-color: #e2e8f0;
+      --dim-color: #272a30;
+      --danger-color: #ff3b5c;
+      --safe-color: #38bdf8;
+      --quantum-color: #c084fc;
+      --photovore-color: #f59e0b;
+    }
+    body {
+      background-color: var(--bg-color);
+      color: var(--fg-color);
+      font-family: 'JetBrains Mono', 'Inter', monospace;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .crt-overlay {
+      pointer-events: none;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.28) 50%
+      );
+      background-size: 100% 4px;
+    }
+    .dither-border {
+      border: 2px solid var(--fg-color);
+      box-shadow: 4px 4px 0px var(--dim-color);
+    }
+    .btn-1bit {
+      border: 1.5px solid var(--fg-color);
+      background: var(--bg-color);
+      color: var(--fg-color);
+      transition: all 0.12s ease;
+    }
+    .btn-1bit:hover {
+      background: var(--fg-color);
+      color: var(--bg-color);
+    }
+    .btn-1bit:active {
+      transform: translate(1px, 1px);
+    }
+    .btn-1bit.active-mode {
+      background: var(--fg-color);
+      color: var(--bg-color);
+      font-weight: 700;
+    }
+    canvas {
+      image-rendering: pixelated;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative">
+  <!-- CRT Scanline Overlay -->
+  <div class="crt-overlay fixed inset-0 z-40"></div>
+
+  <!-- Top Header Bar -->
+  <header class="w-full border-b-2 border-zinc-700 bg-zinc-950/90 px-3 py-2 z-20">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5">
+        <span class="inline-block w-3 h-3 bg-white animate-pulse"></span>
+        <div>
+          <h1 class="text-sm sm:text-base font-extrabold tracking-wider uppercase flex items-center gap-2">
+            <span>1-BIT FLASHLIGHT</span>
+            <span class="text-xs px-1.5 py-0.5 border border-zinc-500 text-zinc-300 font-normal">手电筒怪谈</span>
+          </h1>
+        </div>
+      </div>
+
+      <!-- Level & Palette Controls -->
+      <div class="flex flex-wrap items-center gap-1.5 text-xs">
+        <button id="btnRulesModal" class="btn-1bit px-2.5 py-1 rounded-none flex items-center gap-1">
+          <span>📜 怪谈守则</span>
+        </button>
+        <button id="btnPalette" class="btn-1bit px-2.5 py-1 rounded-none" title="切换1-Bit显像管配色">
+          🎨 配色: <span id="paletteName">经典黑白</span>
+        </button>
+        <button id="btnTickMode" class="btn-1bit px-2.5 py-1 rounded-none" title="切换回合步进或实时心跳模式">
+          ⏱️ 模式: <span id="tickModeName">回合步进</span>
+        </button>
+        <button id="btnMute" class="btn-1bit px-2.5 py-1 rounded-none" title="音效开关">
+          🔊 音效: <span id="muteStatus">开</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-2 sm:px-4 py-2 sm:py-3 grid grid-cols-1 lg:grid-cols-12 gap-3 items-start z-10">
+    <!-- Left / Center: Game Canvas & HUD -->
+    <div class="lg:col-span-8 flex flex-col items-center w-full">
+      <!-- Top Telemetry HUD -->
+      <div class="w-full grid grid-cols-4 gap-1.5 sm:gap-2 mb-1.5 text-xs">
+        <div class="border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between">
+          <span class="text-zinc-400 text-[11px]">当前夜幕 / 档案</span>
+          <div class="font-bold text-sm truncate" id="hudLevelTitle">第 1 夜：别移开视线</div>
+        </div>
+        <div class="border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between">
+          <span class="text-zinc-400 text-[11px]">手电状态 &amp; 电池</span>
+          <div class="flex items-center gap-2">
+            <span id="hudLightBadge" class="px-1.5 py-0.5 text-[11px] font-bold bg-white text-black">ON</span>
+            <div class="flex-1 h-2.5 bg-zinc-800 border border-zinc-600 overflow-hidden">
+              <div id="hudBatteryBar" class="h-full bg-white transition-all duration-150" style="width: 100%;"></div>
+            </div>
+            <span id="hudBatteryText" class="font-bold">100%</span>
+          </div>
+        </div>
+        <div class="border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between">
+          <span class="text-zinc-400 text-[11px]">封印钥匙 / 出口</span>
+          <div class="font-bold text-sm flex items-center gap-1.5">
+            <span id="hudKeys">0 / 1 🗝️</span>
+            <span id="hudDoorState" class="text-[11px] text-zinc-400">(未解锁)</span>
+          </div>
+        </div>
+        <div class="border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between">
+          <span class="text-zinc-400 text-[11px]">暗处动静 / 步数</span>
+          <div class="font-bold text-sm flex items-center justify-between">
+            <span id="hudNoiseStatus" class="text-emerald-400">静止</span>
+            <span class="text-zinc-400 text-xs">步:<span id="hudSteps">0</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dedicated Non-Overlapping Rule Prompt Strip -->
+      <div id="levelBanner" class="w-full bg-zinc-950 border border-zinc-600 px-3 py-1.5 mb-1.5 text-xs flex items-center justify-between">
+        <span id="bannerRuleText" class="text-zinc-200 truncate">【怪谈守则 #1】哭泣雕像只在黑暗中移动；用光束照住它即可将其石化。</span>
+        <span class="text-[10px] text-zinc-400 ml-2 shrink-0">鼠标指向 / Q·E转光</span>
+      </div>
+
+      <!-- Canvas Container -->
+      <div id="canvasWrapper" class="relative w-full aspect-square max-h-[500px] dither-border bg-black flex items-center justify-center overflow-hidden">
+        <canvas id="gameCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+
+        <!-- Level Complete / Game Over Overlay Modal -->
+        <div id="overlayModal" class="hidden absolute inset-0 bg-black/90 z-30 flex flex-col items-center justify-center p-6 text-center">
+          <div class="max-w-md w-full border-2 border-white bg-zinc-950 p-5 shadow-[6px_6px_0px_#3f3f46]">
+            <div id="modalTag" class="inline-block px-2 py-0.5 text-xs font-bold bg-white text-black mb-2">档案记录</div>
+            <h2 id="modalTitle" class="text-xl font-extrabold mb-2 tracking-wide">成功逃离该层</h2>
+            <p id="modalDesc" class="text-xs text-zinc-300 leading-relaxed mb-5">
+              你利用量子观测法则锁死了怪谈的行动轨迹。
+            </p>
+            <div class="flex flex-wrap items-center justify-center gap-2.5">
+              <button id="btnModalRetry" class="btn-1bit px-4 py-2 text-xs font-bold">🔄 重新挑战本夜</button>
+              <button id="btnModalNext" class="btn-1bit active-mode px-5 py-2 text-xs font-bold">➡️ 进入下一夜</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Touch & On-Screen Tactical Controls -->
+      <div class="w-full mt-2 grid grid-cols-12 gap-2 items-center bg-zinc-900/70 border border-zinc-800 p-2">
+        <!-- Rotation & Light Toggle -->
+        <div class="col-span-5 sm:col-span-4 flex flex-col gap-1.5">
+          <div class="grid grid-cols-2 gap-1.5">
+            <button id="btnRotCCW" class="btn-1bit py-2 text-xs font-bold">↺ 左转光 (Q)</button>
+            <button id="btnRotCW" class="btn-1bit py-2 text-xs font-bold">右转光 (E) ↻</button>
+          </div>
+          <button id="btnToggleLight" class="btn-1bit active-mode py-2 text-xs font-bold flex items-center justify-center gap-1.5">
+            <span>🔦 开关手电 (Space/F)</span>
+          </button>
+        </div>
+
+        <!-- Directional D-Pad -->
+        <div class="col-span-4 sm:col-span-5 flex flex-col items-center justify-center">
+          <div class="grid grid-cols-3 gap-1 w-36 sm:w-44">
+            <div></div>
+            <button id="btnMoveUp" class="btn-1bit py-1.5 text-xs font-bold">▲ W</button>
+            <div></div>
+            <button id="btnMoveLeft" class="btn-1bit py-1.5 text-xs font-bold">◀ A</button>
+            <button id="btnWaitStep" class="btn-1bit py-1.5 text-[11px] text-zinc-300" title="原地等待并让暗处世界演化一步">⏳ 等待</button>
+            <button id="btnMoveRight" class="btn-1bit py-1.5 text-xs font-bold">D ▶</button>
+            <div></div>
+            <button id="btnMoveDown" class="btn-1bit py-1.5 text-xs font-bold">▼ S</button>
+            <div></div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="col-span-3 flex flex-col gap-1.5">
+          <button id="btnSonarPing" class="btn-1bit py-2 text-xs font-bold" title="消耗12%电量发出声波，探测全图暗处实体位置">
+            📡 声呐脉冲 (R)
+          </button>
+          <button id="btnRestartLevel" class="btn-1bit py-2 text-xs text-zinc-300">
+            🔄 重置本关
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Level Select, Quantum Rules & Live Radar Log -->
+    <aside class="lg:col-span-4 w-full flex flex-col gap-2.5">
+      <!-- Level Selector -->
+      <div class="border border-zinc-700 bg-zinc-900/80 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300">📂 选择档案关卡</h2>
+          <button id="btnRandomMaze" class="btn-1bit px-2 py-0.5 text-[11px]">🎲 随机怪谈迷宫</button>
+        </div>
+        <div id="levelButtonsContainer" class="grid grid-cols-5 gap-1.5 mb-2"></div>
+        <p id="levelFlavorText" class="text-[11px] text-zinc-400 leading-relaxed border-t border-zinc-800 pt-2">
+          在手电筒狭窄的扇形光束之外，墙壁与怪谈生物正悄然改变位置。
+        </p>
+      </div>
+
+      <!-- Entity Legend & Observation Behavior -->
+      <div class="border border-zinc-700 bg-zinc-900/80 p-3">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">👁️ 观测态 vs 未观测态图鉴</h2>
+        <div class="space-y-2 text-xs">
+          <div class="p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5">
+            <span class="px-1.5 py-0.5 border border-rose-500 text-rose-400 font-bold shrink-0">👁 哭泣雕像</span>
+            <div class="text-[11px] leading-snug">
+              <div><strong class="text-white">光束照射时：</strong>坍缩为静止石像，绝对无害。</div>
+              <div class="text-zinc-400"><strong class="text-rose-400">黑暗盲区中：</strong>每步朝你逼近 1 格！</div>
+            </div>
+          </div>
+
+          <div class="p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5">
+            <span class="px-1.5 py-0.5 border border-purple-400 text-purple-300 font-bold shrink-0">▓ 量子伪墙</span>
+            <div class="text-[11px] leading-snug">
+              <div><strong class="text-white">光束照射时：</strong>位置被观测锁定（显示锁标）。</div>
+              <div class="text-zinc-400"><strong class="text-purple-300">黑暗盲区中：</strong>在开启与闭合之间自动切换！要开门必须先别过头不看它。</div>
+            </div>
+          </div>
+
+          <div class="p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5">
+            <span class="px-1.5 py-0.5 border border-amber-400 text-amber-300 font-bold shrink-0">🕷 趋光影怪</span>
+            <div class="text-[11px] leading-snug">
+              <div><strong class="text-amber-300">光束照射时：</strong>被强光激怒，朝光源扑来！</div>
+              <div class="text-zinc-400"><strong class="text-white">黑暗盲区中：</strong>原地休眠不动，必须关灯或移开视线从旁潜行。</div>
+            </div>
+          </div>
+
+          <div class="p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5">
+            <span class="px-1.5 py-0.5 border border-sky-400 text-sky-300 font-bold shrink-0">🪞 偏振棱镜</span>
+            <div class="text-[11px] leading-snug">
+              <div>手电光束照中棱镜时，会向四周扩散折射出<strong>次级观测光场</strong>，可同时定住多个方向的怪谈。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Quantum Anomaly Log -->
+      <div class="border border-zinc-700 bg-zinc-900/80 p-3 flex-1 flex flex-col">
+        <div class="flex items-center justify-between mb-1.5">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300">📻 黑暗声学记录仪</h2>
+          <span class="text-[10px] text-zinc-500">盲区异动实时监听</span>
+        </div>
+        <div id="anomalyLog" class="text-[11px] font-mono space-y-1 h-32 overflow-y-auto pr-1 text-zinc-300 bg-black/60 p-2 border border-zinc-800">
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Rules Modal (Hidden by default) -->
+  <div id="rulesModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+    <div class="max-w-lg w-full border-2 border-white bg-zinc-950 p-5 shadow-[8px_8px_0px_#27272a]">
+      <div class="flex items-center justify-between border-b border-zinc-700 pb-2.5 mb-3">
+        <h3 class="text-base font-extrabold tracking-wider">📜 《一格手电筒怪谈》生存守则</h3>
+        <button id="btnCloseRules" class="btn-1bit px-2 py-0.5 text-xs">✕ 关闭</button>
+      </div>
+      <ul class="text-xs space-y-2.5 text-zinc-200 leading-relaxed mb-4">
+        <li><strong>1. 量子观测坍缩：</strong>你的手电筒只有一束窄角扇形光。任何被光束直接照亮的物体都会进入“被观测态”。墙壁会阻挡光线形成视野盲区。</li>
+        <li><strong>2. 怎么打开堵死的量子墙？</strong>如果紫色虚线【量子伪墙】挡住了去路，<strong>千万别一直盯着它看</strong>！把视线转开或按 <kbd class="px-1 border border-zinc-500">Space</kbd> 关掉手电筒走一步，它就会在黑暗中移开；听到异动后再立刻开灯照向通路，即可把通路锁定！</li>
+        <li><strong>3. 两种相反的怪谈生物：</strong>红色【哭泣雕像】只在你看不见它时移动，用光盯着它就能定住它；而琥珀色【趋光影怪】恰恰相反，被光照到才会追杀你，关灯或移开视线它就会休眠。</li>
+        <li><strong>4. 记忆残影与声纹：</strong>曾经照亮过的地图会留下暗淡的虚线记忆残影，但盲区里的物体移动后，残影未必可信——留意黑暗中传来的圆形<strong>声波涟漪</strong>或按 <kbd class="px-1 border border-zinc-500">R</kbd> 释放声呐脉冲！</li>
+      </ul>
+      <div class="text-right">
+        <button id="btnConfirmRules" class="btn-1bit active-mode px-4 py-1.5 text-xs font-bold">明白守则，开始观测</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1-BIT FLASHLIGHT (手电筒怪谈) — SELF-CONTAINED QUANTUM STEALTH PUZZLE GAME
+    // =========================================================================
+
+    const PALETTES = [
+      {
+        name: '经典黑白',
+        bg: '#07080a',
+        litFloor: '#e4e4e7',
+        litWall: '#18181b',
+        darkMemWall: '#27272a',
+        darkMemFloor: '#111217',
+        beamFill: 'rgba(255, 255, 255, 0.16)',
+        player: '#ffffff',
+        specterLit: '#71717a',
+        specterDark: '#ff2e55',
+        photovoreLit: '#f59e0b',
+        photovoreDark: '#52525b',
+        quantumWall: '#c084fc',
+        prism: '#38bdf8',
+        key: '#facc15',
+        exitOpen: '#4ade80',
+        exitLocked: '#a1a1aa'
+      },
+      {
+        name: '琥珀荧光',
+        bg: '#0c0800',
+        litFloor: '#ffb000',
+        litWall: '#291a00',
+        darkMemWall: '#3d2800',
+        darkMemFloor: '#170f00',
+        beamFill: 'rgba(255, 176, 0, 0.18)',
+        player: '#ffd166',
+        specterLit: '#8f6200',
+        specterDark: '#ff4d4d',
+        photovoreLit: '#ffffff',
+        photovoreDark: '#5c3d00',
+        quantumWall: '#ffd166',
+        prism: '#fff3b0',
+        key: '#ffffff',
+        exitOpen: '#ffd166',
+        exitLocked: '#7a5200'
+      },
+      {
+        name: '幽绿夜视',
+        bg: '#030b05',
+        litFloor: '#39ff14',
+        litWall: '#09220c',
+        darkMemWall: '#113816',
+        darkMemFloor: '#061508',
+        beamFill: 'rgba(57, 255, 20, 0.16)',
+        player: '#bbf7d0',
+        specterLit: '#166534',
+        specterDark: '#ff3366',
+        photovoreLit: '#fde047',
+        photovoreDark: '#14532d',
+        quantumWall: '#67e8f9',
+        prism: '#a7f3d0',
+        key: '#fef08a',
+        exitOpen: '#4ade80',
+        exitLocked: '#15803d'
+      },
+      {
+        name: '深红怪谈',
+        bg: '#0c0305',
+        litFloor: '#fecdd3',
+        litWall: '#2b0910',
+        darkMemWall: '#4c0519',
+        darkMemFloor: '#190408',
+        beamFill: 'rgba(251, 113, 133, 0.18)',
+        player: '#ffffff',
+        specterLit: '#881337',
+        specterDark: '#ff003c',
+        photovoreLit: '#fbbf24',
+        photovoreDark: '#4c0519',
+        quantumWall: '#e879f9',
+        prism: '#38bdf8',
+        key: '#fde047',
+        exitOpen: '#4ade80',
+        exitLocked: '#9f1239'
+      }
+    ];
+
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      playClick(on = true) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(on ? 920 : 480, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(on ? 1320 : 240, this.ctx.currentTime + 0.045);
+        gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.055);
+      }
+      playStep(hasDarkMovement = false) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(hasDarkMovement ? 115 : 160, now);
+        osc.frequency.exponentialRampToValueAtTime(55, now + 0.07);
+        gain.gain.setValueAtTime(hasDarkMovement ? 0.18 : 0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      }
+      playQuantumShift() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(240, now);
+        osc.frequency.linearRampToValueAtTime(360, now + 0.09);
+        gain.gain.setValueAtTime(0.07, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.11);
+      }
+      playSonar() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(780, now);
+        osc.frequency.exponentialRampToValueAtTime(260, now + 0.35);
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.37);
+      }
+      playKeyPickup() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [587.33, 880, 1174.66].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.055);
+          gain.gain.setValueAtTime(0.1, now + idx * 0.055);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.055 + 0.12);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.055);
+          osc.stop(now + idx * 0.055 + 0.13);
+        });
+      }
+      playWin() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          gain.gain.setValueAtTime(0.14, now + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.22);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.24);
+        });
+      }
+      playGameOver() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [220, 196, 146.83, 98].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+          gain.gain.setValueAtTime(0.15, now + idx * 0.09);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.22);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.09);
+          osc.stop(now + idx * 0.09 + 0.25);
+        });
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    const LEVELS = [
+      {
+        id: 1,
+        title: '第 1 夜：别移开视线',
+        ruleBanner: '【守则 #1】哭泣雕像(👁)只在黑暗中移动。用光束照住它即可将其石化定身！',
+        flavor: '走廊尽头有一尊哭泣雕像。只要你的手电筒光束一直笼罩着它，它就是一块无害的石头；一旦你背过身去拿钥匙，它就会在黑暗里大步向你贴近。',
+        grid: [
+          "###########",
+          "#S..#....K#",
+          "#...#.##..#",
+          "#.....#...#",
+          "###.###...#",
+          "#...#...W.#",
+          "#...#.....#",
+          "#...#####.#",
+          "#.........#",
+          "#.......E.#",
+          "###########"
+        ]
+      },
+      {
+        id: 2,
+        title: '第 2 夜：看不见的墙在动',
+        ruleBanner: '【守则 #2】紫色量子伪墙(▓)被光照射时会锁死；只有移开视线或关灯走一步，它才会在黑暗中移开！',
+        flavor: '通往钥匙和出口的走廊被紫色「量子伪墙」封死了。如果你一直拿手电筒照着它，它永远不会开门。试着把光束转向别处（或按 Space 关灯）迈出一步，听见石墙滑动声后再照过去！',
+        grid: [
+          "###########",
+          "#S..Q....K#",
+          "###.#####.#",
+          "#...#...#.#",
+          "#.q.#.W...#",
+          "#.#.#.###.#",
+          "#.#...#...#",
+          "#.#####.Q.#",
+          "#.......#.#",
+          "#######.E.#",
+          "###########"
+        ]
+      },
+      {
+        id: 3,
+        title: '第 3 夜：偏振棱镜与夹击',
+        ruleBanner: '【守则 #3】手电光束照中偏振棱镜(🪞)时，棱镜会向周围折射出全方位观测光场，同时定住两侧雕像！',
+        flavor: '两尊哭泣雕像分别从南北两条走廊包抄过来，你的一束窄光无法同时照住两边。利用大厅中央的「偏振棱镜」，让折射光场帮你锁住背后的威胁！',
+        grid: [
+          "###########",
+          "#W........#",
+          "#.###.###.#",
+          "#.#.....#.#",
+          "#...#M#...#",
+          "#S..K.M..E#",
+          "#...#M#...#",
+          "#.#.....#.#",
+          "#.###.###.#",
+          "#........W#",
+          "###########"
+        ]
+      },
+      {
+        id: 4,
+        title: '第 4 夜：怕光的与喜光的',
+        ruleBanner: '【守则 #4】琥珀色趋光影怪(🕷)在黑暗中休眠，被手电照亮反而会扑向你！学会及时按 Space 关灯潜行。',
+        flavor: '这一层同时游荡着「哭泣雕像」与「趋光影怪」。照亮雕像能保命，但照亮趋光影怪会引火烧身。你需要精确控制光束角度，必要时果断关掉手电筒从影怪身边摸黑溜过。',
+        grid: [
+          "###########",
+          "#S...#...K#",
+          "####.#.##.#",
+          "#P.....#..#",
+          "#.##.#...W#",
+          "#..#.#.####",
+          "#..P......#",
+          "#.####.##.#",
+          "#....Q..#.#",
+          "#.......E.#",
+          "###########"
+        ]
+      },
+      {
+        id: 5,
+        title: '第 5 夜：一格深渊核心',
+        ruleBanner: '【守则 #5】收集 2 把封印钥匙解锁深渊电梯。善用棱镜折射、关灯潜行与量子墙相位切换！',
+        flavor: '终极怪谈档案：2 把封印钥匙分别藏在量子墙与双怪夹击的密室中。保持冷静，观察黑暗中的声波涟漪，必要时按 R 释放声呐脉冲确认盲区位置。',
+        grid: [
+          "###########",
+          "#K..Q....W#",
+          "###.#####.#",
+          "#...M...#.#",
+          "#.###.#.P.#",
+          "#..S..#...#",
+          "#.###.###.#",
+          "#.#..M..#.#",
+          "#W..###.Q.#",
+          "#K......#E#",
+          "###########"
+        ]
+      }
+    ];
+
+    const state = {
+      levelIndex: 0,
+      isProcedural: false,
+      paletteIndex: 0,
+      realtimeMode: false,
+      rows: 11,
+      cols: 11,
+      baseGrid: [],
+      quantumWalls: [],
+      prisms: [],
+      keys: [],
+      exit: { r: 9, c: 9 },
+      player: {
+        r: 1,
+        c: 1,
+        aimAngle: 0,
+        lightOn: true,
+        battery: 100
+      },
+      entities: [],
+      litMap: [],
+      memoryMap: [],
+      ripples: [],
+      sonarFlashTimer: 0,
+      steps: 0,
+      keysCollected: 0,
+      totalKeys: 1,
+      gameOver: false,
+      gameWon: false,
+      realtimeTimer: null
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function addAnomalyLog(msg, tone = 'normal') {
+      const box = document.getElementById('anomalyLog');
+      if (!box) return;
+      const line = document.createElement('div');
+      const colorClass =
+        tone === 'danger' ? 'text-rose-400 font-semibold' :
+        tone === 'quantum' ? 'text-purple-300' :
+        tone === 'good' ? 'text-emerald-400 font-semibold' :
+        'text-zinc-300';
+      line.className = `${colorClass} leading-tight`;
+      line.textContent = `[步${state.steps}] ${msg}`;
+      box.prepend(line);
+      while (box.children.length > 30) {
+        box.removeChild(box.lastChild);
+      }
+    }
+
+    function renderLevelButtons() {
+      const container = document.getElementById('levelButtonsContainer');
+      container.innerHTML = '';
+      LEVELS.forEach((lvl, idx) => {
+        const btn = document.createElement('button');
+        const isCurrent = !state.isProcedural && state.levelIndex === idx;
+        btn.className = `btn-1bit py-1.5 text-xs font-bold ${isCurrent ? 'active-mode' : ''}`;
+        btn.textContent = `夜 ${idx + 1}`;
+        btn.addEventListener('click', () => {
+          state.isProcedural = false;
+          loadLevel(idx);
+        });
+        container.appendChild(btn);
+      });
+      const randBtn = document.getElementById('btnRandomMaze');
+      if (state.isProcedural) {
+        randBtn.classList.add('active-mode');
+      } else {
+        randBtn.classList.remove('active-mode');
+      }
+    }
+
+    function generateProceduralGrid() {
+      const size = 11;
+      const g = Array.from({ length: size }, () => Array(size).fill('.'));
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (r === 0 || r === size - 1 || c === 0 || c === size - 1) {
+            g[r][c] = '#';
+          } else if (r % 2 === 0 && c % 2 === 0 && Math.random() < 0.65) {
+            g[r][c] = '#';
+            const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+            const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+            if (r + dr > 1 && r + dr < size - 2 && c + dc > 1 && c + dc < size - 2) {
+              g[r + dr][c + dc] = Math.random() < 0.35 ? 'Q' : '#';
+            }
+          }
+        }
+      }
+      g[1][1] = 'S';
+      g[1][2] = '.';
+      g[2][1] = '.';
+      g[size - 2][size - 2] = 'E';
+      g[size - 2][size - 3] = '.';
+      g[size - 3][size - 2] = '.';
+      g[5][5] = 'M';
+      g[1][size - 2] = 'K';
+      g[size - 2][1] = 'K';
+      g[3][size - 3] = 'W';
+      g[size - 3][3] = 'W';
+      g[5][7] = 'P';
+      return g.map(row => row.join(''));
+    }
+
+    function loadLevel(index, procedural = false) {
+      state.isProcedural = procedural;
+      state.levelIndex = index;
+      const lvlObj = procedural
+        ? {
+            title: '无尽夜：随机怪谈迷宫',
+            ruleBanner: '【无尽怪谈档案】收集 2 把封印钥匙并逃往出口。所有量子怪谈法则同时生效！',
+            flavor: '每次生成的迷宫都包含量子伪墙、偏振棱镜、哭泣雕像与趋光影怪。灵活切换开关灯与视线方向！',
+            grid: generateProceduralGrid()
+          }
+        : LEVELS[index];
+
+      const raw = lvlObj.grid;
+      state.rows = raw.length;
+      state.cols = raw[0].length;
+      state.baseGrid = [];
+      state.quantumWalls = [];
+      state.prisms = [];
+      state.keys = [];
+      state.entities = [];
+      state.ripples = [];
+      state.litMap = Array.from({ length: state.rows }, () => Array(state.cols).fill(false));
+      state.memoryMap = Array.from({ length: state.rows }, () => Array(state.cols).fill(false));
+      state.steps = 0;
+      state.keysCollected = 0;
+      state.sonarFlashTimer = 0;
+      state.gameOver = false;
+      state.gameWon = false;
+
+      let entId = 1;
+      for (let r = 0; r < state.rows; r++) {
+        const rowArr = [];
+        for (let c = 0; c < state.cols; c++) {
+          const ch = raw[r][c];
+          if (ch === '#') {
+            rowArr.push('#');
+          } else {
+            rowArr.push('.');
+            if (ch === 'S') {
+              state.player.r = r;
+              state.player.c = c;
+              state.player.aimAngle = 0;
+              state.player.lightOn = true;
+              state.player.battery = 100;
+            } else if (ch === 'K') {
+              state.keys.push({ r, c, collected: false });
+            } else if (ch === 'E') {
+              state.exit = { r, c };
+            } else if (ch === 'W') {
+              state.entities.push({ id: entId++, type: 'specter', r, c, lit: false });
+            } else if (ch === 'P') {
+              state.entities.push({ id: entId++, type: 'photovore', r, c, lit: false });
+            } else if (ch === 'Q') {
+              state.quantumWalls.push({ r, c, closed: true, lockedByLight: false });
+            } else if (ch === 'q') {
+              state.quantumWalls.push({ r, c, closed: false, lockedByLight: false });
+            } else if (ch === 'M') {
+              state.prisms.push({ r, c, active: false });
+            }
+          }
+        }
+        state.baseGrid.push(rowArr);
+      }
+
+      state.totalKeys = state.keys.length;
+      document.getElementById('hudLevelTitle').textContent = lvlObj.title;
+      document.getElementById('bannerRuleText').textContent = lvlObj.ruleBanner;
+      document.getElementById('levelFlavorText').textContent = lvlObj.flavor;
+      document.getElementById('overlayModal').classList.add('hidden');
+      document.getElementById('anomalyLog').innerHTML = '';
+
+      renderLevelButtons();
+      recalculateLighting();
+      updateHUD();
+      addAnomalyLog(`进入「${lvlObj.title}」，手电筒已开启。`, 'good');
+      drawScene();
+    }
+
+    function isOpaqueWall(r, c) {
+      if (r < 0 || r >= state.rows || c < 0 || c >= state.cols) return true;
+      if (state.baseGrid[r][c] === '#') return true;
+      const qw = state.quantumWalls.find(q => q.r === r && q.c === c);
+      if (qw && qw.closed) return true;
+      return false;
+    }
+
+    function isWalkableForPlayer(r, c) {
+      if (isOpaqueWall(r, c)) return false;
+      const prism = state.prisms.find(p => p.r === r && p.c === c);
+      if (prism) return false;
+      return true;
+    }
+
+    function hasLineOfSight(r0, c0, r1, c1) {
+      const x0 = c0 + 0.5;
+      const y0 = r0 + 0.5;
+      const x1 = c1 + 0.5;
+      const y1 = r1 + 0.5;
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const dist = Math.hypot(dx, dy);
+      const steps = Math.ceil(dist * 6);
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        const cx = Math.floor(x0 + dx * t);
+        const cy = Math.floor(y0 + dy * t);
+        if (cy === r1 && cx === c1) return true;
+        if (cy === r0 && cx === c0) continue;
+        if (isOpaqueWall(cy, cx)) return false;
+      }
+      return true;
+    }
+
+    function angleDiff(a, b) {
+      let d = a - b;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      return d;
+    }
+
+    function recalculateLighting() {
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          state.litMap[r][c] = false;
+        }
+      }
+
+      const pr = state.player.r;
+      const pc = state.player.c;
+      state.litMap[pr][pc] = true;
+      state.memoryMap[pr][pc] = true;
+
+      if (state.player.lightOn && state.player.battery > 0) {
+        const coneHalfAngle = 0.44;
+        const maxRange = 7.5;
+
+        for (let r = 0; r < state.rows; r++) {
+          for (let c = 0; c < state.cols; c++) {
+            const dr = r - pr;
+            const dc = c - pc;
+            const dist = Math.hypot(dr, dc);
+            if (dist <= 1.1) {
+              const ang = Math.atan2(dr, dc);
+              if (Math.abs(angleDiff(ang, state.player.aimAngle)) <= 1.15) {
+                state.litMap[r][c] = true;
+                state.memoryMap[r][c] = true;
+              }
+            }
+            if (dist <= maxRange && dist > 0) {
+              const ang = Math.atan2(dr, dc);
+              if (Math.abs(angleDiff(ang, state.player.aimAngle)) <= coneHalfAngle) {
+                if (hasLineOfSight(pr, pc, r, c)) {
+                  state.litMap[r][c] = true;
+                  state.memoryMap[r][c] = true;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      state.prisms.forEach(p => {
+        p.active = state.litMap[p.r][p.c];
+        if (p.active) {
+          for (let r = 0; r < state.rows; r++) {
+            for (let c = 0; c < state.cols; c++) {
+              if (Math.hypot(r - p.r, c - p.c) <= 3.2 && hasLineOfSight(p.r, p.c, r, c)) {
+                state.litMap[r][c] = true;
+                state.memoryMap[r][c] = true;
+              }
+            }
+          }
+        }
+      });
+
+      state.quantumWalls.forEach(qw => {
+        qw.lockedByLight = state.litMap[qw.r][qw.c];
+      });
+      state.entities.forEach(ent => {
+        ent.lit = state.litMap[ent.r][ent.c];
+      });
+    }
+
+    function getNextStepToward(startR, startC, targetR, targetC) {
+      const queue = [[startR, startC, []]];
+      const visited = Array.from({ length: state.rows }, () => Array(state.cols).fill(false));
+      visited[startR][startC] = true;
+      const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+
+      while (queue.length > 0) {
+        const [r, c, path] = queue.shift();
+        if (r === targetR && c === targetC) {
+          return path.length > 0 ? path[0] : [startR, startC];
+        }
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols && !visited[nr][nc]) {
+            const isTarget = nr === targetR && nc === targetC;
+            const occupiedByOtherEntity = state.entities.some(e => e.r === nr && e.c === nc);
+            const occupiedByPrism = state.prisms.some(p => p.r === nr && p.c === nc);
+            if (!isOpaqueWall(nr, nc) && !occupiedByPrism && (isTarget || !occupiedByOtherEntity)) {
+              visited[nr][nc] = true;
+              queue.push([nr, nc, [...path, [nr, nc]]]);
+            }
+          }
+        }
+      }
+      return [startR, startC];
+    }
+
+    function addSoundRipple(r, c, color = '#ff3b5c', maxRadius = 1.6) {
+      state.ripples.push({ r, c, radius: 0.15, maxRadius, alpha: 0.95, color });
+    }
+
+    function advanceWorldTurn() {
+      if (state.gameOver || state.gameWon) return;
+      state.steps++;
+
+      if (state.player.lightOn) {
+        const watchingSpecter = state.entities.some(e => e.type === 'specter' && e.lit);
+        const drain = watchingSpecter ? 3 : 1.5;
+        state.player.battery = Math.max(0, Math.round((state.player.battery - drain) * 10) / 10);
+        if (state.player.battery <= 0) {
+          state.player.lightOn = false;
+          addAnomalyLog('⚠️ 手电筒电量耗尽！陷入完全黑暗，关灯移动可缓慢恢复备用电容。', 'danger');
+        }
+      } else {
+        state.player.battery = Math.min(100, Math.round((state.player.battery + 4) * 10) / 10);
+      }
+
+      recalculateLighting();
+
+      let wallShiftedCount = 0;
+      state.quantumWalls.forEach(qw => {
+        const hasEntityOrPlayer =
+          (state.player.r === qw.r && state.player.c === qw.c) ||
+          state.entities.some(e => e.r === qw.r && e.c === qw.c);
+        if (!qw.lockedByLight && !hasEntityOrPlayer) {
+          qw.closed = !qw.closed;
+          wallShiftedCount++;
+          addSoundRipple(qw.r, qw.c, '#c084fc', 1.25);
+        }
+      });
+
+      if (wallShiftedCount > 0) {
+        sound.playQuantumShift();
+        addAnomalyLog(`盲区中有 ${wallShiftedCount} 处量子伪墙发生了相位移动…`, 'quantum');
+      }
+
+      recalculateLighting();
+
+      state.keys.forEach(k => {
+        if (!k.collected && k.r === state.player.r && k.c === state.player.c) {
+          k.collected = true;
+          state.keysCollected++;
+          sound.playKeyPickup();
+          addSoundRipple(k.r, k.c, '#facc15', 2.0);
+          addAnomalyLog(`拾取了封印钥匙 (${state.keysCollected}/${state.totalKeys})！`, 'good');
+        }
+      });
+
+      if (
+        state.player.r === state.exit.r &&
+        state.player.c === state.exit.c &&
+        state.keysCollected >= state.totalKeys
+      ) {
+        triggerVictory();
+        return;
+      }
+
+      let darkFootsteps = 0;
+      for (const ent of state.entities) {
+        if (ent.r === state.player.r && ent.c === state.player.c) {
+          triggerGameOver(ent.type);
+          return;
+        }
+
+        if (ent.type === 'specter') {
+          if (!ent.lit) {
+            const [nr, nc] = getNextStepToward(ent.r, ent.c, state.player.r, state.player.c);
+            if (nr !== ent.r || nc !== ent.c) {
+              ent.r = nr;
+              ent.c = nc;
+              darkFootsteps++;
+              addSoundRipple(ent.r, ent.c, '#ff2e55', 1.55);
+            }
+          }
+        } else if (ent.type === 'photovore') {
+          if (ent.lit) {
+            const [nr, nc] = getNextStepToward(ent.r, ent.c, state.player.r, state.player.c);
+            if (nr !== ent.r || nc !== ent.c) {
+              ent.r = nr;
+              ent.c = nc;
+              addSoundRipple(ent.r, ent.c, '#f59e0b', 1.55);
+              addAnomalyLog('⚠️ 趋光影怪被手电强光激怒，正向你逼近！', 'danger');
+            }
+          }
+        }
+
+        if (ent.r === state.player.r && ent.c === state.player.c) {
+          recalculateLighting();
+          triggerGameOver(ent.type);
+          return;
+        }
+      }
+
+      recalculateLighting();
+      sound.playStep(darkFootsteps > 0);
+
+      const noiseEl = document.getElementById('hudNoiseStatus');
+      if (darkFootsteps > 0) {
+        noiseEl.textContent = `⚠️ ${darkFootsteps}处脚步`;
+        noiseEl.className = 'text-rose-400 font-bold animate-pulse';
+        addAnomalyLog(`黑暗盲区传来 ${darkFootsteps} 阵沉重的石像挪动声！`, 'danger');
+      } else {
+        noiseEl.textContent = '安静';
+        noiseEl.className = 'text-emerald-400';
+      }
+
+      updateHUD();
+      drawScene();
+    }
+
+    function triggerVictory() {
+      state.gameWon = true;
+      sound.playWin();
+      updateHUD();
+      drawScene();
+      const modal = document.getElementById('overlayModal');
+      document.getElementById('modalTag').textContent = '观测档案完成';
+      document.getElementById('modalTag').className = 'inline-block px-2 py-0.5 text-xs font-bold bg-emerald-400 text-black mb-2';
+      document.getElementById('modalTitle').textContent = '成功逃出怪谈层！';
+      document.getElementById('modalDesc').textContent =
+        `你用 ${state.steps} 步解开了量子观测封锁，剩余电量 ${Math.round(state.player.battery)}%。准备好迎接更诡异的下一夜守则了吗？`;
+      modal.classList.remove('hidden');
+      addAnomalyLog('🎉 成功抵达解锁的深渊电梯，顺利脱出！', 'good');
+    }
+
+    function triggerGameOver(killerType) {
+      state.gameOver = true;
+      sound.playGameOver();
+      updateHUD();
+      drawScene();
+      const modal = document.getElementById('overlayModal');
+      document.getElementById('modalTag').textContent = '观测坍缩失败';
+      document.getElementById('modalTag').className = 'inline-block px-2 py-0.5 text-xs font-bold bg-rose-500 text-white mb-2';
+      document.getElementById('modalTitle').textContent =
+        killerType === 'specter' ? '被黑暗中的哭泣雕像捕获' : '被狂暴的趋光影怪吞噬';
+      document.getElementById('modalDesc').textContent =
+        killerType === 'specter'
+          ? '【死因分析】哭泣雕像在你的手电盲区中悄悄贴近了你。记住：用光束照住它或者利用偏振棱镜折射光线，才能将它石化定身！'
+          : '【死因分析】趋光影怪被你的手电筒光束唤醒并扑向了你。遇到琥珀色影怪时，请按 Space 关灯或移开视线从它身旁潜行！';
+      modal.classList.remove('hidden');
+      addAnomalyLog('💀 信号中断：观测者已被怪谈吞噬。', 'danger');
+    }
+
+    function tryMovePlayer(dr, dc) {
+      if (state.gameOver || state.gameWon) return;
+      const nr = state.player.r + dr;
+      const nc = state.player.c + dc;
+      if (!isWalkableForPlayer(nr, nc)) {
+        addSoundRipple(nr, nc, '#71717a', 0.6);
+        drawScene();
+        return;
+      }
+      state.player.r = nr;
+      state.player.c = nc;
+      advanceWorldTurn();
+    }
+
+    function rotateFlashlight(deltaRad) {
+      if (state.gameOver || state.gameWon) return;
+      state.player.aimAngle += deltaRad;
+      recalculateLighting();
+      drawScene();
+    }
+
+    function toggleFlashlight() {
+      if (state.gameOver || state.gameWon) return;
+      if (!state.player.lightOn && state.player.battery <= 0) {
+        addAnomalyLog('电池耗尽，请先在暗处移动一步恢复电容！', 'danger');
+        return;
+      }
+      state.player.lightOn = !state.player.lightOn;
+      sound.playClick(state.player.lightOn);
+      recalculateLighting();
+      updateHUD();
+      drawScene();
+      addAnomalyLog(
+        state.player.lightOn ? '🔦 开启手电筒：光锥内的物体已被观测锁定。' : '🌑 关闭手电筒：世界进入未观测叠加态。'
+      );
+    }
+
+    function triggerSonarPing() {
+      if (state.gameOver || state.gameWon) return;
+      if (state.player.battery < 12) {
+        addAnomalyLog('电量不足 12%，无法发射声呐脉冲！', 'danger');
+        return;
+      }
+      state.player.battery = Math.max(0, state.player.battery - 12);
+      state.sonarFlashTimer = 38;
+      sound.playSonar();
+      addSoundRipple(state.player.r, state.player.c, '#38bdf8', 5.5);
+      state.entities.forEach(e => {
+        addSoundRipple(e.r, e.c, e.type === 'specter' ? '#ff2e55' : '#f59e0b', 1.8);
+      });
+      updateHUD();
+      addAnomalyLog('📡 发射声呐脉冲：短暂显影全图暗处怪谈轮廓！', 'good');
+    }
+
+    function updateHUD() {
+      const badge = document.getElementById('hudLightBadge');
+      if (state.player.lightOn) {
+        badge.textContent = 'ON';
+        badge.className = 'px-1.5 py-0.5 text-[11px] font-bold bg-white text-black';
+      } else {
+        badge.textContent = 'OFF';
+        badge.className = 'px-1.5 py-0.5 text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-600';
+      }
+      const pct = Math.round(state.player.battery);
+      document.getElementById('hudBatteryBar').style.width = `${pct}%`;
+      document.getElementById('hudBatteryText').textContent = `${pct}%`;
+      document.getElementById('hudKeys').textContent = `${state.keysCollected} / ${state.totalKeys} 🗝️`;
+      const doorEl = document.getElementById('hudDoorState');
+      if (state.keysCollected >= state.totalKeys) {
+        doorEl.textContent = '(已开启!)';
+        doorEl.className = 'text-[11px] text-emerald-400 font-bold';
+      } else {
+        doorEl.textContent = '(未解锁)';
+        doorEl.className = 'text-[11px] text-zinc-400';
+      }
+      document.getElementById('hudSteps').textContent = String(state.steps);
+    }
+
+    function resizeCanvas() {
+      const wrapper = document.getElementById('canvasWrapper');
+      if (!wrapper) return;
+      const rect = wrapper.getBoundingClientRect();
+      const size = Math.max(280, Math.floor(Math.min(rect.width, rect.height)));
+      if (canvas.width !== size || canvas.height !== size) {
+        canvas.width = size;
+        canvas.height = size;
+      }
+      drawScene();
+    }
+
+    function drawScene() {
+      const pal = PALETTES[state.paletteIndex];
+      const W = canvas.width;
+      const H = canvas.height;
+      const tileW = W / state.cols;
+      const tileH = H / state.rows;
+
+      ctx.fillStyle = pal.bg;
+      ctx.fillRect(0, 0, W, H);
+
+      if (state.player.lightOn && state.player.battery > 0) {
+        const px = (state.player.c + 0.5) * tileW;
+        const py = (state.player.r + 0.5) * tileH;
+        const coneHalf = 0.44;
+        const maxDist = 7.5 * tileW;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        const rayCount = 48;
+        for (let i = 0; i <= rayCount; i++) {
+          const ang = state.player.aimAngle - coneHalf + (coneHalf * 2 * i) / rayCount;
+          let hitX = px + Math.cos(ang) * maxDist;
+          let hitY = py + Math.sin(ang) * maxDist;
+          for (let d = 0.2; d <= 7.5; d += 0.12) {
+            const tx = state.player.c + 0.5 + Math.cos(ang) * d;
+            const ty = state.player.r + 0.5 + Math.sin(ang) * d;
+            const cr = Math.floor(ty);
+            const cc = Math.floor(tx);
+            if (isOpaqueWall(cr, cc)) {
+              hitX = tx * tileW;
+              hitY = ty * tileH;
+              break;
+            }
+          }
+          ctx.lineTo(hitX, hitY);
+        }
+        ctx.closePath();
+        ctx.fillStyle = pal.beamFill;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          const x = c * tileW;
+          const y = r * tileH;
+          const isLit = state.litMap[r][c];
+          const inMemory = state.memoryMap[r][c];
+          const isSolidBase = state.baseGrid[r][c] === '#';
+          const qw = state.quantumWalls.find(q => q.r === r && q.c === c);
+
+          if (isLit) {
+            if (isSolidBase) {
+              ctx.fillStyle = pal.litWall;
+              ctx.fillRect(x, y, tileW, tileH);
+              ctx.strokeStyle = pal.litFloor;
+              ctx.lineWidth = 1.5;
+              ctx.strokeRect(x + 2, y + 2, tileW - 4, tileH - 4);
+              ctx.beginPath();
+              ctx.moveTo(x + 3, y + tileH - 3);
+              ctx.lineTo(x + tileW - 3, y + 3);
+              ctx.stroke();
+            } else if (qw) {
+              ctx.fillStyle = qw.closed ? '#2e1065' : pal.litFloor;
+              ctx.fillRect(x + 1, y + 1, tileW - 2, tileH - 2);
+              ctx.strokeStyle = pal.quantumWall;
+              ctx.lineWidth = 2;
+              ctx.strokeRect(x + 3, y + 3, tileW - 6, tileH - 6);
+              ctx.fillStyle = qw.closed ? pal.quantumWall : '#18181b';
+              ctx.font = `bold ${Math.floor(tileW * 0.36)}px "JetBrains Mono", monospace`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(qw.closed ? '🔒墙' : '🔒通', x + tileW / 2, y + tileH / 2);
+            } else {
+              ctx.fillStyle = pal.litFloor;
+              ctx.fillRect(x + 0.5, y + 0.5, tileW - 1, tileH - 1);
+              ctx.fillStyle = pal.bg;
+              ctx.fillRect(x + tileW / 2 - 1, y + tileH / 2 - 1, 2, 2);
+            }
+          } else if (inMemory || state.sonarFlashTimer > 0) {
+            if (isSolidBase) {
+              ctx.fillStyle = pal.darkMemWall;
+              ctx.fillRect(x + 2, y + 2, tileW - 4, tileH - 4);
+              ctx.strokeStyle = '#3f3f46';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x + 3, y + 3, tileW - 6, tileH - 6);
+            } else if (qw) {
+              ctx.strokeStyle = pal.quantumWall;
+              ctx.lineWidth = 1;
+              ctx.setLineDash([3, 3]);
+              ctx.strokeRect(x + 4, y + 4, tileW - 8, tileH - 8);
+              ctx.setLineDash([]);
+              ctx.fillStyle = pal.quantumWall;
+              ctx.font = `${Math.floor(tileW * 0.34)}px "JetBrains Mono", monospace`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(qw.closed ? '▓?' : '·?', x + tileW / 2, y + tileH / 2);
+            } else {
+              ctx.fillStyle = pal.darkMemFloor;
+              ctx.fillRect(x + 2, y + 2, tileW - 4, tileH - 4);
+            }
+          }
+        }
+      }
+
+      state.prisms.forEach(p => {
+        const isLit = state.litMap[p.r][p.c];
+        const inMem = state.memoryMap[p.r][p.c] || state.sonarFlashTimer > 0;
+        if (!isLit && !inMem) return;
+        const cx = (p.c + 0.5) * tileW;
+        const cy = (p.r + 0.5) * tileH;
+        const rad = tileW * 0.34;
+        ctx.save();
+        ctx.translate(cx, cy);
+        if (p.active) {
+          ctx.strokeStyle = pal.prism;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, tileW * 0.45, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = isLit ? pal.prism : '#1e293b';
+        ctx.strokeStyle = pal.prism;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -rad);
+        ctx.lineTo(rad, 0);
+        ctx.lineTo(0, rad);
+        ctx.lineTo(-rad, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      state.keys.forEach(k => {
+        if (k.collected) return;
+        const isLit = state.litMap[k.r][k.c];
+        const inMem = state.memoryMap[k.r][k.c] || state.sonarFlashTimer > 0;
+        if (!isLit && !inMem) return;
+        const cx = (k.c + 0.5) * tileW;
+        const cy = (k.r + 0.5) * tileH;
+        ctx.save();
+        ctx.fillStyle = isLit ? '#18181b' : pal.key;
+        ctx.strokeStyle = pal.key;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, tileW * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = `bold ${Math.floor(tileW * 0.44)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🗝', cx, cy + 1);
+        ctx.restore();
+      });
+
+      {
+        const er = state.exit.r;
+        const ec = state.exit.c;
+        const x = ec * tileW;
+        const y = er * tileH;
+        const unlocked = state.keysCollected >= state.totalKeys;
+        ctx.save();
+        ctx.strokeStyle = unlocked ? pal.exitOpen : pal.exitLocked;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(x + 4, y + 4, tileW - 8, tileH - 8);
+        ctx.fillStyle = unlocked ? pal.exitOpen : pal.exitLocked;
+        ctx.font = `bold ${Math.floor(tileW * 0.38)}px "JetBrains Mono", monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(unlocked ? 'EXIT' : 'LOCK', x + tileW / 2, y + tileH / 2);
+        ctx.restore();
+      }
+
+      state.entities.forEach(ent => {
+        const isLit = ent.lit;
+        const revealBySonar = state.sonarFlashTimer > 0 || state.gameOver;
+        if (!isLit && !revealBySonar) return;
+
+        const cx = (ent.c + 0.5) * tileW;
+        const cy = (ent.r + 0.5) * tileH;
+        ctx.save();
+        if (ent.type === 'specter') {
+          ctx.fillStyle = isLit ? '#27272a' : '#4c0519';
+          ctx.strokeStyle = isLit ? '#ffffff' : pal.specterDark;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, tileW * 0.36, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = isLit ? '#ffffff' : pal.specterDark;
+          ctx.font = `bold ${Math.floor(tileW * 0.38)}px "JetBrains Mono", monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(isLit ? '🗿定' : '👁危', cx, cy);
+        } else {
+          ctx.fillStyle = isLit ? '#451a03' : '#18181b';
+          ctx.strokeStyle = isLit ? pal.photovoreLit : '#71717a';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, tileW * 0.36, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = isLit ? pal.photovoreLit : '#a1a1aa';
+          ctx.font = `bold ${Math.floor(tileW * 0.38)}px "JetBrains Mono", monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(isLit ? '🕷怒' : '💤眠', cx, cy);
+        }
+        ctx.restore();
+      });
+
+      for (let i = state.ripples.length - 1; i >= 0; i--) {
+        const rp = state.ripples[i];
+        const cx = (rp.c + 0.5) * tileW;
+        const cy = (rp.r + 0.5) * tileH;
+        ctx.save();
+        ctx.strokeStyle = rp.color;
+        ctx.globalAlpha = rp.alpha;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rp.radius * tileW, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      {
+        const px = (state.player.c + 0.5) * tileW;
+        const py = (state.player.r + 0.5) * tileH;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(state.player.aimAngle);
+
+        ctx.fillStyle = '#090a0c';
+        ctx.strokeStyle = pal.player;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, tileW * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = state.player.lightOn ? pal.key : '#52525b';
+        ctx.fillRect(tileW * 0.16, -tileW * 0.1, tileW * 0.25, tileW * 0.2);
+        ctx.restore();
+      }
+    }
+
+    function animationTick() {
+      let needsRedraw = false;
+      if (state.sonarFlashTimer > 0) {
+        state.sonarFlashTimer--;
+        needsRedraw = true;
+      }
+      for (let i = state.ripples.length - 1; i >= 0; i--) {
+        const rp = state.ripples[i];
+        rp.radius += 0.045;
+        rp.alpha -= 0.024;
+        needsRedraw = true;
+        if (rp.alpha <= 0 || rp.radius >= rp.maxRadius) {
+          state.ripples.splice(i, 1);
+        }
+      }
+      if (needsRedraw) {
+        drawScene();
+      }
+      requestAnimationFrame(animationTick);
+    }
+
+    function updateAimFromPointer(clientX, clientY) {
+      if (state.gameOver || state.gameWon) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mx = (clientX - rect.left) * scaleX;
+      const my = (clientY - rect.top) * scaleY;
+      const tileW = canvas.width / state.cols;
+      const tileH = canvas.height / state.rows;
+      const px = (state.player.c + 0.5) * tileW;
+      const py = (state.player.r + 0.5) * tileH;
+      if (Math.hypot(mx - px, my - py) > 6) {
+        state.player.aimAngle = Math.atan2(my - py, mx - px);
+        recalculateLighting();
+        drawScene();
+      }
+    }
+
+    canvas.addEventListener('mousemove', e => {
+      updateAimFromPointer(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('pointerdown', e => {
+      sound.init();
+      updateAimFromPointer(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('keydown', e => {
+      if (!document.getElementById('rulesModal').classList.contains('hidden')) {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+          document.getElementById('rulesModal').classList.add('hidden');
+        }
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+        e.preventDefault();
+      }
+      if (key === 'w' || key === 'arrowup') tryMovePlayer(-1, 0);
+      else if (key === 's' || key === 'arrowdown') tryMovePlayer(1, 0);
+      else if (key === 'a' || key === 'arrowleft') tryMovePlayer(0, -1);
+      else if (key === 'd' || key === 'arrowright') tryMovePlayer(0, 1);
+      else if (key === 'q') rotateFlashlight(-Math.PI / 6);
+      else if (key === 'e') rotateFlashlight(Math.PI / 6);
+      else if (key === ' ' || key === 'f') toggleFlashlight();
+      else if (key === 'r') triggerSonarPing();
+      else if (key === '.') advanceWorldTurn();
+    });
+
+    document.getElementById('btnMoveUp').addEventListener('click', () => tryMovePlayer(-1, 0));
+    document.getElementById('btnMoveDown').addEventListener('click', () => tryMovePlayer(1, 0));
+    document.getElementById('btnMoveLeft').addEventListener('click', () => tryMovePlayer(0, -1));
+    document.getElementById('btnMoveRight').addEventListener('click', () => tryMovePlayer(0, 1));
+    document.getElementById('btnWaitStep').addEventListener('click', () => {
+      addAnomalyLog('原地屏息等待了一步，倾听黑暗中的动静…');
+      advanceWorldTurn();
+    });
+    document.getElementById('btnRotCCW').addEventListener('click', () => rotateFlashlight(-Math.PI / 4));
+    document.getElementById('btnRotCW').addEventListener('click', () => rotateFlashlight(Math.PI / 4));
+    document.getElementById('btnToggleLight').addEventListener('click', () => toggleFlashlight());
+    document.getElementById('btnSonarPing').addEventListener('click', () => triggerSonarPing());
+    document.getElementById('btnRestartLevel').addEventListener('click', () => loadLevel(state.levelIndex, state.isProcedural));
+    document.getElementById('btnRandomMaze').addEventListener('click', () => loadLevel(state.levelIndex, true));
+
+    document.getElementById('btnModalRetry').addEventListener('click', () => {
+      loadLevel(state.levelIndex, state.isProcedural);
+    });
+    document.getElementById('btnModalNext').addEventListener('click', () => {
+      if (state.isProcedural) {
+        loadLevel(state.levelIndex, true);
+      } else if (state.levelIndex + 1 < LEVELS.length) {
+        loadLevel(state.levelIndex + 1, false);
+      } else {
+        loadLevel(0, true);
+      }
+    });
+
+    document.getElementById('btnPalette').addEventListener('click', () => {
+      state.paletteIndex = (state.paletteIndex + 1) % PALETTES.length;
+      document.getElementById('paletteName').textContent = PALETTES[state.paletteIndex].name;
+      drawScene();
+    });
+
+    document.getElementById('btnTickMode').addEventListener('click', () => {
+      state.realtimeMode = !state.realtimeMode;
+      document.getElementById('tickModeName').textContent = state.realtimeMode ? '实时心跳' : '回合步进';
+      if (state.realtimeTimer) {
+        clearInterval(state.realtimeTimer);
+        state.realtimeTimer = null;
+      }
+      if (state.realtimeMode) {
+        addAnomalyLog('⏱️ 已切换至「实时心跳模式」：即使你不走动，黑暗中的世界也会每 1.3 秒演化一次！', 'quantum');
+        state.realtimeTimer = setInterval(() => {
+          if (!state.gameOver && !state.gameWon && document.getElementById('rulesModal').classList.contains('hidden')) {
+            advanceWorldTurn();
+          }
+        }, 1300);
+      } else {
+        addAnomalyLog('⏱️ 已切换至「回合步进模式」：每当你迈出一步或按等待，时间才会推进。');
+      }
+    });
+
+    document.getElementById('btnMute').addEventListener('click', () => {
+      sound.muted = !sound.muted;
+      document.getElementById('muteStatus').textContent = sound.muted ? '关' : '开';
+    });
+
+    document.getElementById('btnRulesModal').addEventListener('click', () => {
+      document.getElementById('rulesModal').classList.remove('hidden');
+    });
+    document.getElementById('btnCloseRules').addEventListener('click', () => {
+      document.getElementById('rulesModal').classList.add('hidden');
+    });
+    document.getElementById('btnConfirmRules').addEventListener('click', () => {
+      document.getElementById('rulesModal').classList.add('hidden');
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('load', () => {
+      loadLevel(0, false);
+      resizeCanvas();
+      requestAnimationFrame(animationTick);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INDIE WEB ARCADE // 个人创意小游戏合集大厅</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --arcade-bg: #07080c;
+      --arcade-panel: #10121a;
+      --arcade-border: #e2e8f0;
+      --arcade-accent: #38bdf8;
+      --arcade-warn: #f59e0b;
+      --arcade-danger: #fb7185;
+      --arcade-ok: #4ade80;
+    }
+    body {
+      background-color: var(--arcade-bg);
+      color: #f1f5f9;
+      font-family: 'JetBrains Mono', 'Inter', monospace;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    .crt-lines {
+      pointer-events: none;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%,
+        rgba(0, 0, 0, 0.30) 50%
+      );
+      background-size: 100% 4px;
+    }
+    .arcade-box {
+      border: 2px solid #e2e8f0;
+      box-shadow: 5px 5px 0px #1e293b;
+      background: #0d0f17;
+    }
+    .arcade-card {
+      border: 1.5px solid #334155;
+      background: #0f131d;
+      transition: all 0.14s ease;
+    }
+    .arcade-card:hover {
+      border-color: #f8fafc;
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0px #334155;
+    }
+    .arcade-card.selected-cart {
+      border: 2px solid #ffffff;
+      background: #171c2b;
+      box-shadow: 4px 4px 0px #38bdf8;
+    }
+    .arcade-btn {
+      border: 1.5px solid #cbd5e1;
+      background: #090b10;
+      color: #f8fafc;
+      transition: all 0.12s ease;
+    }
+    .arcade-btn:hover {
+      background: #f8fafc;
+      color: #090b10;
+    }
+    .arcade-btn.btn-active {
+      background: #38bdf8;
+      border-color: #38bdf8;
+      color: #090b10;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative">
+  <!-- Optional CRT Scanline Layer -->
+  <div id="crtOverlay" class="crt-lines fixed inset-0 z-40"></div>
+
+  <!-- Top Arcade Marquee Header -->
+  <header class="w-full border-b-2 border-slate-700 bg-slate-950/95 px-4 py-3 z-20">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 border-2 border-white bg-sky-400 text-black font-extrabold flex items-center justify-center text-lg shadow-[3px_3px_0px_#fff]">
+          🕹️
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-extrabold tracking-wider uppercase text-white">
+              INDIE WEB ARCADE
+            </h1>
+            <span class="text-[11px] px-2 py-0.5 border border-sky-400 text-sky-300 bg-sky-950/50 font-semibold">
+              GitHub + Netlify 街机合集
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            单文件 HTML5 创意实验游戏厅 · 即插即玩 · 零后端依赖
+          </p>
+        </div>
+      </div>
+
+      <!-- Top Action Bar -->
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <div class="hidden sm:flex items-center gap-2 px-2.5 py-1 border border-slate-700 bg-slate-900 text-slate-300">
+          <span>已激活卡带: <strong id="statPlayableCount" class="text-emerald-400">1</strong></span>
+          <span class="text-slate-600">|</span>
+          <span>预留卡槽: <strong id="statDraftCount" class="text-amber-300">3</strong></span>
+        </div>
+        <button id="btnOpenAddModal" class="arcade-btn px-3 py-1.5 font-bold">
+          ➕ 新增卡带配置
+        </button>
+        <button id="btnOpenDeployModal" class="arcade-btn px-3 py-1.5">
+          🚀 GitHub+Netlify 部署指南
+        </button>
+        <button id="btnToggleCRT" class="arcade-btn px-2.5 py-1.5" title="切换显像管扫描线">
+          📺 扫描线: <span id="crtStateText">开</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Arcade Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-5 py-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start z-10">
+    <!-- Left Sidebar: Cartridge Rack & Filters (4 cols) -->
+    <aside id="cartridgeSidebar" class="lg:col-span-4 w-full flex flex-col gap-3">
+      <div class="arcade-box p-3.5">
+        <div class="flex items-center justify-between mb-2.5">
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+            <span>📼 游戏卡带架 (CARTRIDGE RACK)</span>
+          </h2>
+          <span class="text-[11px] text-slate-400" id="rackTotalText">共 4 枚卡带</span>
+        </div>
+
+        <!-- Search & Category Filter -->
+        <div class="mb-2.5">
+          <input id="searchInput" type="text" placeholder="搜索游戏名称、机制或标签..."
+                 class="w-full bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400" />
+        </div>
+        <div id="categoryFilterBar" class="flex flex-wrap gap-1.5 mb-3"></div>
+
+        <!-- Cartridge List -->
+        <div id="cartridgeList" class="space-y-2.5 max-h-[540px] overflow-y-auto pr-1"></div>
+      </div>
+
+      <!-- How to add a game quick tip card -->
+      <div class="border border-slate-800 bg-slate-900/70 p-3 text-[11px] text-slate-300 space-y-1.5">
+        <div class="font-bold text-white flex items-center justify-between">
+          <span>💡 怎么往合集里放第 2 个游戏？</span>
+          <span class="text-[10px] text-sky-400 font-mono">games/*.html</span>
+        </div>
+        <p class="text-slate-400 leading-relaxed">
+          把新的单文件游戏（例如 <code class="text-sky-300">uvsu_loop.html</code>）放进仓库的 <code class="text-sky-300">games/</code> 文件夹，再点击顶部「➕ 新增卡带配置」生成配置或直接解锁下方预留卡槽，推送到 GitHub 即可自动上线。
+        </p>
+      </div>
+    </aside>
+
+    <!-- Right Main Area: Arcade Cabinet Screen & Cartridge Inspector (8 cols) -->
+    <section id="cabinetSection" class="lg:col-span-8 w-full flex flex-col gap-3">
+      <!-- Active Cartridge Header Bar -->
+      <div class="arcade-box p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <span id="activeCartCode" class="px-2 py-0.5 text-xs font-extrabold bg-emerald-400 text-black">
+            CART-01
+          </span>
+          <div>
+            <h2 id="activeCartTitle" class="text-sm sm:text-base font-extrabold text-white">
+              1-Bit Flashlight（手电筒怪谈）
+            </h2>
+            <p id="activeCartSubtitle" class="text-[11px] text-slate-400">
+              量子观测潜行解谜 · 只有在手电筒照不到的时候，地形和怪物才会移动
+            </p>
+          </div>
+        </div>
+
+        <!-- Cabinet Toolbar -->
+        <div class="flex flex-wrap items-center gap-1.5 text-xs">
+          <button id="btnReloadCart" class="arcade-btn px-2.5 py-1">
+            🔄 重启卡带
+          </button>
+          <button id="btnToggleWide" class="arcade-btn px-2.5 py-1">
+            ⛶ 宽屏街机模式
+          </button>
+          <button id="btnOpenStandalone" class="arcade-btn btn-active px-3 py-1">
+            ↗ 独立窗口全屏玩
+          </button>
+        </div>
+      </div>
+
+      <!-- Arcade Screen Viewport -->
+      <div class="arcade-box relative bg-black w-full overflow-hidden flex flex-col" style="height: 670px;">
+        <!-- Live iframe for playable games -->
+        <iframe id="arcadeIframe" title="Arcade Game Screen" class="w-full flex-1 border-0 bg-black"></iframe>
+
+        <!-- Placeholder view for upcoming / draft slots -->
+        <div id="draftSlotOverlay" class="hidden absolute inset-0 bg-slate-950/95 z-20 flex flex-col items-center justify-center p-6 text-center">
+          <div class="max-w-lg w-full border-2 border-dashed border-amber-400 bg-slate-900/90 p-6 shadow-[6px_6px_0px_#1e293b]">
+            <span id="draftSlotBadge" class="inline-block px-2 py-0.5 text-xs font-bold bg-amber-400 text-black mb-2">
+              预留扩展卡带槽
+            </span>
+            <h3 id="draftSlotTitle" class="text-lg font-extrabold text-white mb-2">
+              待导入游戏槽位
+            </h3>
+            <p id="draftSlotDesc" class="text-xs text-slate-300 leading-relaxed mb-4"></p>
+            <div class="text-left bg-black/80 border border-slate-700 p-3 text-[11px] font-mono text-sky-300 mb-4">
+              <div class="text-slate-400 mb-1">// 激活此卡槽只需两步：</div>
+              <div>1. 将生成的游戏文件保存为 <span id="draftSlotPath" class="text-amber-300 font-bold">games/uvsu_loop.html</span></div>
+              <div>2. 在 <span class="text-white">index.html</span> 中将该卡带的 <span class="text-emerald-400">status</span> 改为 <span class="text-emerald-400">'playable'</span></div>
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-2">
+              <button id="btnBackToCart01" class="arcade-btn btn-active px-4 py-2 text-xs font-bold">
+                🎮 返回游玩《01. 手电筒怪谈》
+              </button>
+              <button id="btnCustomizeSlot" class="arcade-btn px-4 py-2 text-xs">
+                ➕ 打开配置生成器
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cartridge Manual & Metadata Footer -->
+      <div class="arcade-box p-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+        <div class="border border-slate-800 bg-slate-950/70 p-2.5">
+          <div class="text-slate-400 text-[11px] mb-1">🎯 操作说明书 (CONTROLS)</div>
+          <div id="infoControls" class="font-semibold text-white leading-snug">
+            WASD / 方向键移动 · 鼠标或 Q/E 旋转手电光束 · Space 开关灯 · R 声呐脉冲
+          </div>
+        </div>
+        <div class="border border-slate-800 bg-slate-950/70 p-2.5">
+          <div class="text-slate-400 text-[11px] mb-1">📂 仓库文件路径 (REPO PATH)</div>
+          <div id="infoFilePath" class="font-mono text-sky-300 break-all">
+            games/one_bit_flashlight.html
+          </div>
+        </div>
+        <div class="border border-slate-800 bg-slate-950/70 p-2.5">
+          <div class="text-slate-400 text-[11px] mb-1">🏷️ 核心机制标签 (MECHANICS)</div>
+          <div id="infoTags" class="flex flex-wrap gap-1 mt-1"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal 1: Add New Cartridge Config Generator -->
+  <div id="addCartModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+    <div class="max-w-xl w-full arcade-box p-5 bg-slate-950">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-2.5 mb-3">
+        <h3 class="text-base font-extrabold text-white">➕ 新增小游戏卡带配置生成器</h3>
+        <button id="btnCloseAddModal" class="arcade-btn px-2 py-0.5 text-xs">✕ 关闭</button>
+      </div>
+      <p class="text-xs text-slate-400 mb-3 leading-relaxed">
+        填写你新做的小游戏信息，点击「在当前大厅预览添加」即可立刻加入左侧卡带架，同时生成可复制到 <code class="text-sky-300">index.html</code> 的配置代码：
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs mb-3">
+        <div>
+          <label class="block text-slate-400 mb-1">游戏标题</label>
+          <input id="inpGameTitle" type="text" value="与过去的自己接力 (10s Echo)"
+                 class="w-full bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-white" />
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">文件名（放在 games/ 下）</label>
+          <input id="inpGameFile" type="text" value="ten_sec_echo.html"
+                 class="w-full bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-sky-300 font-mono" />
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">分类标签（逗号分隔）</label>
+          <input id="inpGameTags" type="text" value="时间循环, 分身解谜, 动作"
+                 class="w-full bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-white" />
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">操作按键说明</label>
+          <input id="inpGameControls" type="text" value="WASD 移动 / Space 互动接力"
+                 class="w-full bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-white" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-slate-400 mb-1">一句话核心机制简介</label>
+          <input id="inpGameDesc" type="text" value="每10秒重置回起点，上一轮的你会化作残影原样重演，与过去的自己配合搭人梯过关。"
+                 class="w-full bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-white" />
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+          <span>生成的 GAMES 数组配置项（可复制到 index.html）：</span>
+          <button id="btnCopySnippet" class="arcade-btn px-2 py-0.5 text-[11px]">📋 复制代码</button>
+        </div>
+        <pre id="generatedSnippet" class="bg-black border border-slate-800 p-2.5 text-[11px] text-emerald-400 overflow-x-auto font-mono"></pre>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button id="btnPreviewAddCart" class="arcade-btn btn-active px-4 py-1.5 text-xs font-bold">
+          ✨ 在当前大厅添加此卡槽并预览
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: GitHub + Netlify Quick Deploy Guide -->
+  <div id="deployModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+    <div class="max-w-xl w-full arcade-box p-5 bg-slate-950">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-2.5 mb-3">
+        <h3 class="text-base font-extrabold text-white">🚀 GitHub + Netlify 仓库部署速查</h3>
+        <button id="btnCloseDeployModal" class="arcade-btn px-2 py-0.5 text-xs">✕ 关闭</button>
+      </div>
+      <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+        <div class="p-3 border border-slate-800 bg-slate-900/80">
+          <div class="font-bold text-white mb-1">步骤 1：解压 my_arcade_repo.zip 并推送到 GitHub</div>
+          <p class="text-slate-400 mb-2">压缩包内已包含 <code class="text-sky-300">index.html</code>、<code class="text-sky-300">games/one_bit_flashlight.html</code>、<code class="text-sky-300">netlify.toml</code> 和 <code class="text-sky-300">README.md</code>。解压后在终端运行：</p>
+          <pre class="bg-black p-2.5 text-[11px] text-sky-300 border border-slate-800 overflow-x-auto">git init
+git add .
+git commit -m "feat: 初始化个人创意小游戏合集大厅"
+git branch -M main
+git remote add origin https://github.com/&lt;你的用户名&gt;/my-arcade.git
+git push -u origin main</pre>
+        </div>
+        <div class="p-3 border border-slate-800 bg-slate-900/80">
+          <div class="font-bold text-white mb-1">步骤 2：在 Netlify 一键导入仓库</div>
+          <p class="text-slate-400">
+            在 Netlify 点击 <strong>Add new site → Import an existing project</strong> 选择该 GitHub 仓库。由于仓库自带 <code class="text-sky-300">netlify.toml</code>，Build command 会自动留空、Publish directory 自动设为根目录 <code class="text-sky-300">.</code>，直接点击 <strong>Deploy</strong> 即可上线！
+          </p>
+        </div>
+      </div>
+      <div class="mt-4 text-right">
+        <button id="btnConfirmDeployModal" class="arcade-btn btn-active px-4 py-1.5 text-xs font-bold">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // EMBEDDED CARTRIDGE CACHE FOR #01 (1-BIT FLASHLIGHT)
+    // Allows instant play in Canvas preview, local file:// double-click, AND Netlify!
+    // =========================================================================
+    const EMBEDDED_CARTRIDGES = {
+      '1bit-flashlight': "\u003c!DOCTYPE html\u003e\n\u003chtml lang=\"zh-CN\"\u003e\n\u003chead\u003e\n  \u003cmeta charset=\"UTF-8\" /\u003e\n  \u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\" /\u003e\n  \u003ctitle\u003e1-Bit Flashlight \u2014 \u624b\u7535\u7b52\u602a\u8c08\u003c/title\u003e\n  \u003cscript src=\"https://cdn.tailwindcss.com/3.4.17\"\u003e\u003c/script\u003e\n  \u003clink href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700;800&display=swap\" rel=\"stylesheet\"\u003e\n  \u003cstyle\u003e\n    :root {\n      --bg-color: #090a0c;\n      --fg-color: #f4f4f6;\n      --accent-color: #e2e8f0;\n      --dim-color: #272a30;\n      --danger-color: #ff3b5c;\n      --safe-color: #38bdf8;\n      --quantum-color: #c084fc;\n      --photovore-color: #f59e0b;\n    }\n    body {\n      background-color: var(--bg-color);\n      color: var(--fg-color);\n      font-family: 'JetBrains Mono', 'Inter', monospace;\n      margin: 0;\n      padding: 0;\n      overflow-x: hidden;\n      user-select: none;\n      -webkit-user-select: none;\n    }\n    .crt-overlay {\n      pointer-events: none;\n      background: linear-gradient(\n        rgba(18, 16, 16, 0) 50%, \n        rgba(0, 0, 0, 0.28) 50%\n      );\n      background-size: 100% 4px;\n    }\n    .dither-border {\n      border: 2px solid var(--fg-color);\n      box-shadow: 4px 4px 0px var(--dim-color);\n    }\n    .btn-1bit {\n      border: 1.5px solid var(--fg-color);\n      background: var(--bg-color);\n      color: var(--fg-color);\n      transition: all 0.12s ease;\n    }\n    .btn-1bit:hover {\n      background: var(--fg-color);\n      color: var(--bg-color);\n    }\n    .btn-1bit:active {\n      transform: translate(1px, 1px);\n    }\n    .btn-1bit.active-mode {\n      background: var(--fg-color);\n      color: var(--bg-color);\n      font-weight: 700;\n    }\n    canvas {\n      image-rendering: pixelated;\n      touch-action: none;\n    }\n  \u003c/style\u003e\n\u003c/head\u003e\n\u003cbody class=\"min-h-screen flex flex-col justify-between relative\"\u003e\n  \u003c!-- CRT Scanline Overlay --\u003e\n  \u003cdiv class=\"crt-overlay fixed inset-0 z-40\"\u003e\u003c/div\u003e\n\n  \u003c!-- Top Header Bar --\u003e\n  \u003cheader class=\"w-full border-b-2 border-zinc-700 bg-zinc-950/90 px-3 py-2 z-20\"\u003e\n    \u003cdiv class=\"max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2\"\u003e\n      \u003cdiv class=\"flex items-center gap-2.5\"\u003e\n        \u003cspan class=\"inline-block w-3 h-3 bg-white animate-pulse\"\u003e\u003c/span\u003e\n        \u003cdiv\u003e\n          \u003ch1 class=\"text-sm sm:text-base font-extrabold tracking-wider uppercase flex items-center gap-2\"\u003e\n            \u003cspan\u003e1-BIT FLASHLIGHT\u003c/span\u003e\n            \u003cspan class=\"text-xs px-1.5 py-0.5 border border-zinc-500 text-zinc-300 font-normal\"\u003e\u624b\u7535\u7b52\u602a\u8c08\u003c/span\u003e\n          \u003c/h1\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n\n      \u003c!-- Level & Palette Controls --\u003e\n      \u003cdiv class=\"flex flex-wrap items-center gap-1.5 text-xs\"\u003e\n        \u003cbutton id=\"btnRulesModal\" class=\"btn-1bit px-2.5 py-1 rounded-none flex items-center gap-1\"\u003e\n          \u003cspan\u003e\ud83d\udcdc \u602a\u8c08\u5b88\u5219\u003c/span\u003e\n        \u003c/button\u003e\n        \u003cbutton id=\"btnPalette\" class=\"btn-1bit px-2.5 py-1 rounded-none\" title=\"\u5207\u63621-Bit\u663e\u50cf\u7ba1\u914d\u8272\"\u003e\n          \ud83c\udfa8 \u914d\u8272: \u003cspan id=\"paletteName\"\u003e\u7ecf\u5178\u9ed1\u767d\u003c/span\u003e\n        \u003c/button\u003e\n        \u003cbutton id=\"btnTickMode\" class=\"btn-1bit px-2.5 py-1 rounded-none\" title=\"\u5207\u6362\u56de\u5408\u6b65\u8fdb\u6216\u5b9e\u65f6\u5fc3\u8df3\u6a21\u5f0f\"\u003e\n          \u23f1\ufe0f \u6a21\u5f0f: \u003cspan id=\"tickModeName\"\u003e\u56de\u5408\u6b65\u8fdb\u003c/span\u003e\n        \u003c/button\u003e\n        \u003cbutton id=\"btnMute\" class=\"btn-1bit px-2.5 py-1 rounded-none\" title=\"\u97f3\u6548\u5f00\u5173\"\u003e\n          \ud83d\udd0a \u97f3\u6548: \u003cspan id=\"muteStatus\"\u003e\u5f00\u003c/span\u003e\n        \u003c/button\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n  \u003c/header\u003e\n\n  \u003c!-- Main Workspace --\u003e\n  \u003cmain class=\"flex-1 max-w-6xl w-full mx-auto px-2 sm:px-4 py-2 sm:py-3 grid grid-cols-1 lg:grid-cols-12 gap-3 items-start z-10\"\u003e\n    \u003c!-- Left / Center: Game Canvas & HUD --\u003e\n    \u003cdiv class=\"lg:col-span-8 flex flex-col items-center w-full\"\u003e\n      \u003c!-- Top Telemetry HUD --\u003e\n      \u003cdiv class=\"w-full grid grid-cols-4 gap-1.5 sm:gap-2 mb-1.5 text-xs\"\u003e\n        \u003cdiv class=\"border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between\"\u003e\n          \u003cspan class=\"text-zinc-400 text-[11px]\"\u003e\u5f53\u524d\u591c\u5e55 / \u6863\u6848\u003c/span\u003e\n          \u003cdiv class=\"font-bold text-sm truncate\" id=\"hudLevelTitle\"\u003e\u7b2c 1 \u591c\uff1a\u522b\u79fb\u5f00\u89c6\u7ebf\u003c/div\u003e\n        \u003c/div\u003e\n        \u003cdiv class=\"border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between\"\u003e\n          \u003cspan class=\"text-zinc-400 text-[11px]\"\u003e\u624b\u7535\u72b6\u6001 &amp; \u7535\u6c60\u003c/span\u003e\n          \u003cdiv class=\"flex items-center gap-2\"\u003e\n            \u003cspan id=\"hudLightBadge\" class=\"px-1.5 py-0.5 text-[11px] font-bold bg-white text-black\"\u003eON\u003c/span\u003e\n            \u003cdiv class=\"flex-1 h-2.5 bg-zinc-800 border border-zinc-600 overflow-hidden\"\u003e\n              \u003cdiv id=\"hudBatteryBar\" class=\"h-full bg-white transition-all duration-150\" style=\"width: 100%;\"\u003e\u003c/div\u003e\n            \u003c/div\u003e\n            \u003cspan id=\"hudBatteryText\" class=\"font-bold\"\u003e100%\u003c/span\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n        \u003cdiv class=\"border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between\"\u003e\n          \u003cspan class=\"text-zinc-400 text-[11px]\"\u003e\u5c01\u5370\u94a5\u5319 / \u51fa\u53e3\u003c/span\u003e\n          \u003cdiv class=\"font-bold text-sm flex items-center gap-1.5\"\u003e\n            \u003cspan id=\"hudKeys\"\u003e0 / 1 \ud83d\udddd\ufe0f\u003c/span\u003e\n            \u003cspan id=\"hudDoorState\" class=\"text-[11px] text-zinc-400\"\u003e(\u672a\u89e3\u9501)\u003c/span\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n        \u003cdiv class=\"border border-zinc-700 bg-zinc-900/80 px-2.5 py-1.5 flex flex-col justify-between\"\u003e\n          \u003cspan class=\"text-zinc-400 text-[11px]\"\u003e\u6697\u5904\u52a8\u9759 / \u6b65\u6570\u003c/span\u003e\n          \u003cdiv class=\"font-bold text-sm flex items-center justify-between\"\u003e\n            \u003cspan id=\"hudNoiseStatus\" class=\"text-emerald-400\"\u003e\u9759\u6b62\u003c/span\u003e\n            \u003cspan class=\"text-zinc-400 text-xs\"\u003e\u6b65:\u003cspan id=\"hudSteps\"\u003e0\u003c/span\u003e\u003c/span\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n\n      \u003c!-- Dedicated Non-Overlapping Rule Prompt Strip --\u003e\n      \u003cdiv id=\"levelBanner\" class=\"w-full bg-zinc-950 border border-zinc-600 px-3 py-1.5 mb-1.5 text-xs flex items-center justify-between\"\u003e\n        \u003cspan id=\"bannerRuleText\" class=\"text-zinc-200 truncate\"\u003e\u3010\u602a\u8c08\u5b88\u5219 #1\u3011\u54ed\u6ce3\u96d5\u50cf\u53ea\u5728\u9ed1\u6697\u4e2d\u79fb\u52a8\uff1b\u7528\u5149\u675f\u7167\u4f4f\u5b83\u5373\u53ef\u5c06\u5176\u77f3\u5316\u3002\u003c/span\u003e\n        \u003cspan class=\"text-[10px] text-zinc-400 ml-2 shrink-0\"\u003e\u9f20\u6807\u6307\u5411 / Q\u00b7E\u8f6c\u5149\u003c/span\u003e\n      \u003c/div\u003e\n\n      \u003c!-- Canvas Container --\u003e\n      \u003cdiv id=\"canvasWrapper\" class=\"relative w-full aspect-square max-h-[500px] dither-border bg-black flex items-center justify-center overflow-hidden\"\u003e\n        \u003ccanvas id=\"gameCanvas\" class=\"w-full h-full block cursor-crosshair\"\u003e\u003c/canvas\u003e\n\n        \u003c!-- Level Complete / Game Over Overlay Modal --\u003e\n        \u003cdiv id=\"overlayModal\" class=\"hidden absolute inset-0 bg-black/90 z-30 flex flex-col items-center justify-center p-6 text-center\"\u003e\n          \u003cdiv class=\"max-w-md w-full border-2 border-white bg-zinc-950 p-5 shadow-[6px_6px_0px_#3f3f46]\"\u003e\n            \u003cdiv id=\"modalTag\" class=\"inline-block px-2 py-0.5 text-xs font-bold bg-white text-black mb-2\"\u003e\u6863\u6848\u8bb0\u5f55\u003c/div\u003e\n            \u003ch2 id=\"modalTitle\" class=\"text-xl font-extrabold mb-2 tracking-wide\"\u003e\u6210\u529f\u9003\u79bb\u8be5\u5c42\u003c/h2\u003e\n            \u003cp id=\"modalDesc\" class=\"text-xs text-zinc-300 leading-relaxed mb-5\"\u003e\n              \u4f60\u5229\u7528\u91cf\u5b50\u89c2\u6d4b\u6cd5\u5219\u9501\u6b7b\u4e86\u602a\u8c08\u7684\u884c\u52a8\u8f68\u8ff9\u3002\n            \u003c/p\u003e\n            \u003cdiv class=\"flex flex-wrap items-center justify-center gap-2.5\"\u003e\n              \u003cbutton id=\"btnModalRetry\" class=\"btn-1bit px-4 py-2 text-xs font-bold\"\u003e\ud83d\udd04 \u91cd\u65b0\u6311\u6218\u672c\u591c\u003c/button\u003e\n              \u003cbutton id=\"btnModalNext\" class=\"btn-1bit active-mode px-5 py-2 text-xs font-bold\"\u003e\u27a1\ufe0f \u8fdb\u5165\u4e0b\u4e00\u591c\u003c/button\u003e\n            \u003c/div\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n\n      \u003c!-- Touch & On-Screen Tactical Controls --\u003e\n      \u003cdiv class=\"w-full mt-2 grid grid-cols-12 gap-2 items-center bg-zinc-900/70 border border-zinc-800 p-2\"\u003e\n        \u003c!-- Rotation & Light Toggle --\u003e\n        \u003cdiv class=\"col-span-5 sm:col-span-4 flex flex-col gap-1.5\"\u003e\n          \u003cdiv class=\"grid grid-cols-2 gap-1.5\"\u003e\n            \u003cbutton id=\"btnRotCCW\" class=\"btn-1bit py-2 text-xs font-bold\"\u003e\u21ba \u5de6\u8f6c\u5149 (Q)\u003c/button\u003e\n            \u003cbutton id=\"btnRotCW\" class=\"btn-1bit py-2 text-xs font-bold\"\u003e\u53f3\u8f6c\u5149 (E) \u21bb\u003c/button\u003e\n          \u003c/div\u003e\n          \u003cbutton id=\"btnToggleLight\" class=\"btn-1bit active-mode py-2 text-xs font-bold flex items-center justify-center gap-1.5\"\u003e\n            \u003cspan\u003e\ud83d\udd26 \u5f00\u5173\u624b\u7535 (Space/F)\u003c/span\u003e\n          \u003c/button\u003e\n        \u003c/div\u003e\n\n        \u003c!-- Directional D-Pad --\u003e\n        \u003cdiv class=\"col-span-4 sm:col-span-5 flex flex-col items-center justify-center\"\u003e\n          \u003cdiv class=\"grid grid-cols-3 gap-1 w-36 sm:w-44\"\u003e\n            \u003cdiv\u003e\u003c/div\u003e\n            \u003cbutton id=\"btnMoveUp\" class=\"btn-1bit py-1.5 text-xs font-bold\"\u003e\u25b2 W\u003c/button\u003e\n            \u003cdiv\u003e\u003c/div\u003e\n            \u003cbutton id=\"btnMoveLeft\" class=\"btn-1bit py-1.5 text-xs font-bold\"\u003e\u25c0 A\u003c/button\u003e\n            \u003cbutton id=\"btnWaitStep\" class=\"btn-1bit py-1.5 text-[11px] text-zinc-300\" title=\"\u539f\u5730\u7b49\u5f85\u5e76\u8ba9\u6697\u5904\u4e16\u754c\u6f14\u5316\u4e00\u6b65\"\u003e\u23f3 \u7b49\u5f85\u003c/button\u003e\n            \u003cbutton id=\"btnMoveRight\" class=\"btn-1bit py-1.5 text-xs font-bold\"\u003eD \u25b6\u003c/button\u003e\n            \u003cdiv\u003e\u003c/div\u003e\n            \u003cbutton id=\"btnMoveDown\" class=\"btn-1bit py-1.5 text-xs font-bold\"\u003e\u25bc S\u003c/button\u003e\n            \u003cdiv\u003e\u003c/div\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n\n        \u003c!-- Quick Actions --\u003e\n        \u003cdiv class=\"col-span-3 flex flex-col gap-1.5\"\u003e\n          \u003cbutton id=\"btnSonarPing\" class=\"btn-1bit py-2 text-xs font-bold\" title=\"\u6d88\u801712%\u7535\u91cf\u53d1\u51fa\u58f0\u6ce2\uff0c\u63a2\u6d4b\u5168\u56fe\u6697\u5904\u5b9e\u4f53\u4f4d\u7f6e\"\u003e\n            \ud83d\udce1 \u58f0\u5450\u8109\u51b2 (R)\n          \u003c/button\u003e\n          \u003cbutton id=\"btnRestartLevel\" class=\"btn-1bit py-2 text-xs text-zinc-300\"\u003e\n            \ud83d\udd04 \u91cd\u7f6e\u672c\u5173\n          \u003c/button\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003c!-- Right Panel: Level Select, Quantum Rules & Live Radar Log --\u003e\n    \u003caside class=\"lg:col-span-4 w-full flex flex-col gap-2.5\"\u003e\n      \u003c!-- Level Selector --\u003e\n      \u003cdiv class=\"border border-zinc-700 bg-zinc-900/80 p-3\"\u003e\n        \u003cdiv class=\"flex items-center justify-between mb-2\"\u003e\n          \u003ch2 class=\"text-xs font-bold uppercase tracking-wider text-zinc-300\"\u003e\ud83d\udcc2 \u9009\u62e9\u6863\u6848\u5173\u5361\u003c/h2\u003e\n          \u003cbutton id=\"btnRandomMaze\" class=\"btn-1bit px-2 py-0.5 text-[11px]\"\u003e\ud83c\udfb2 \u968f\u673a\u602a\u8c08\u8ff7\u5bab\u003c/button\u003e\n        \u003c/div\u003e\n        \u003cdiv id=\"levelButtonsContainer\" class=\"grid grid-cols-5 gap-1.5 mb-2\"\u003e\u003c/div\u003e\n        \u003cp id=\"levelFlavorText\" class=\"text-[11px] text-zinc-400 leading-relaxed border-t border-zinc-800 pt-2\"\u003e\n          \u5728\u624b\u7535\u7b52\u72ed\u7a84\u7684\u6247\u5f62\u5149\u675f\u4e4b\u5916\uff0c\u5899\u58c1\u4e0e\u602a\u8c08\u751f\u7269\u6b63\u6084\u7136\u6539\u53d8\u4f4d\u7f6e\u3002\n        \u003c/p\u003e\n      \u003c/div\u003e\n\n      \u003c!-- Entity Legend & Observation Behavior --\u003e\n      \u003cdiv class=\"border border-zinc-700 bg-zinc-900/80 p-3\"\u003e\n        \u003ch2 class=\"text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2\"\u003e\ud83d\udc41\ufe0f \u89c2\u6d4b\u6001 vs \u672a\u89c2\u6d4b\u6001\u56fe\u9274\u003c/h2\u003e\n        \u003cdiv class=\"space-y-2 text-xs\"\u003e\n          \u003cdiv class=\"p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5\"\u003e\n            \u003cspan class=\"px-1.5 py-0.5 border border-rose-500 text-rose-400 font-bold shrink-0\"\u003e\ud83d\udc41 \u54ed\u6ce3\u96d5\u50cf\u003c/span\u003e\n            \u003cdiv class=\"text-[11px] leading-snug\"\u003e\n              \u003cdiv\u003e\u003cstrong class=\"text-white\"\u003e\u5149\u675f\u7167\u5c04\u65f6\uff1a\u003c/strong\u003e\u574d\u7f29\u4e3a\u9759\u6b62\u77f3\u50cf\uff0c\u7edd\u5bf9\u65e0\u5bb3\u3002\u003c/div\u003e\n              \u003cdiv class=\"text-zinc-400\"\u003e\u003cstrong class=\"text-rose-400\"\u003e\u9ed1\u6697\u76f2\u533a\u4e2d\uff1a\u003c/strong\u003e\u6bcf\u6b65\u671d\u4f60\u903c\u8fd1 1 \u683c\uff01\u003c/div\u003e\n            \u003c/div\u003e\n          \u003c/div\u003e\n\n          \u003cdiv class=\"p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5\"\u003e\n            \u003cspan class=\"px-1.5 py-0.5 border border-purple-400 text-purple-300 font-bold shrink-0\"\u003e\u2593 \u91cf\u5b50\u4f2a\u5899\u003c/span\u003e\n            \u003cdiv class=\"text-[11px] leading-snug\"\u003e\n              \u003cdiv\u003e\u003cstrong class=\"text-white\"\u003e\u5149\u675f\u7167\u5c04\u65f6\uff1a\u003c/strong\u003e\u4f4d\u7f6e\u88ab\u89c2\u6d4b\u9501\u5b9a\uff08\u663e\u793a\u9501\u6807\uff09\u3002\u003c/div\u003e\n              \u003cdiv class=\"text-zinc-400\"\u003e\u003cstrong class=\"text-purple-300\"\u003e\u9ed1\u6697\u76f2\u533a\u4e2d\uff1a\u003c/strong\u003e\u5728\u5f00\u542f\u4e0e\u95ed\u5408\u4e4b\u95f4\u81ea\u52a8\u5207\u6362\uff01\u8981\u5f00\u95e8\u5fc5\u987b\u5148\u522b\u8fc7\u5934\u4e0d\u770b\u5b83\u3002\u003c/div\u003e\n            \u003c/div\u003e\n          \u003c/div\u003e\n\n          \u003cdiv class=\"p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5\"\u003e\n            \u003cspan class=\"px-1.5 py-0.5 border border-amber-400 text-amber-300 font-bold shrink-0\"\u003e\ud83d\udd77 \u8d8b\u5149\u5f71\u602a\u003c/span\u003e\n            \u003cdiv class=\"text-[11px] leading-snug\"\u003e\n              \u003cdiv\u003e\u003cstrong class=\"text-amber-300\"\u003e\u5149\u675f\u7167\u5c04\u65f6\uff1a\u003c/strong\u003e\u88ab\u5f3a\u5149\u6fc0\u6012\uff0c\u671d\u5149\u6e90\u6251\u6765\uff01\u003c/div\u003e\n              \u003cdiv class=\"text-zinc-400\"\u003e\u003cstrong class=\"text-white\"\u003e\u9ed1\u6697\u76f2\u533a\u4e2d\uff1a\u003c/strong\u003e\u539f\u5730\u4f11\u7720\u4e0d\u52a8\uff0c\u5fc5\u987b\u5173\u706f\u6216\u79fb\u5f00\u89c6\u7ebf\u4ece\u65c1\u6f5c\u884c\u3002\u003c/div\u003e\n            \u003c/div\u003e\n          \u003c/div\u003e\n\n          \u003cdiv class=\"p-2 border border-zinc-800 bg-zinc-950/80 flex items-start gap-2.5\"\u003e\n            \u003cspan class=\"px-1.5 py-0.5 border border-sky-400 text-sky-300 font-bold shrink-0\"\u003e\ud83e\ude9e \u504f\u632f\u68f1\u955c\u003c/span\u003e\n            \u003cdiv class=\"text-[11px] leading-snug\"\u003e\n              \u003cdiv\u003e\u624b\u7535\u5149\u675f\u7167\u4e2d\u68f1\u955c\u65f6\uff0c\u4f1a\u5411\u56db\u5468\u6269\u6563\u6298\u5c04\u51fa\u003cstrong\u003e\u6b21\u7ea7\u89c2\u6d4b\u5149\u573a\u003c/strong\u003e\uff0c\u53ef\u540c\u65f6\u5b9a\u4f4f\u591a\u4e2a\u65b9\u5411\u7684\u602a\u8c08\u3002\u003c/div\u003e\n            \u003c/div\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n\n      \u003c!-- Real-Time Quantum Anomaly Log --\u003e\n      \u003cdiv class=\"border border-zinc-700 bg-zinc-900/80 p-3 flex-1 flex flex-col\"\u003e\n        \u003cdiv class=\"flex items-center justify-between mb-1.5\"\u003e\n          \u003ch2 class=\"text-xs font-bold uppercase tracking-wider text-zinc-300\"\u003e\ud83d\udcfb \u9ed1\u6697\u58f0\u5b66\u8bb0\u5f55\u4eea\u003c/h2\u003e\n          \u003cspan class=\"text-[10px] text-zinc-500\"\u003e\u76f2\u533a\u5f02\u52a8\u5b9e\u65f6\u76d1\u542c\u003c/span\u003e\n        \u003c/div\u003e\n        \u003cdiv id=\"anomalyLog\" class=\"text-[11px] font-mono space-y-1 h-32 overflow-y-auto pr-1 text-zinc-300 bg-black/60 p-2 border border-zinc-800\"\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n    \u003c/aside\u003e\n  \u003c/main\u003e\n\n  \u003c!-- Rules Modal (Hidden by default) --\u003e\n  \u003cdiv id=\"rulesModal\" class=\"hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4\"\u003e\n    \u003cdiv class=\"max-w-lg w-full border-2 border-white bg-zinc-950 p-5 shadow-[8px_8px_0px_#27272a]\"\u003e\n      \u003cdiv class=\"flex items-center justify-between border-b border-zinc-700 pb-2.5 mb-3\"\u003e\n        \u003ch3 class=\"text-base font-extrabold tracking-wider\"\u003e\ud83d\udcdc \u300a\u4e00\u683c\u624b\u7535\u7b52\u602a\u8c08\u300b\u751f\u5b58\u5b88\u5219\u003c/h3\u003e\n        \u003cbutton id=\"btnCloseRules\" class=\"btn-1bit px-2 py-0.5 text-xs\"\u003e\u2715 \u5173\u95ed\u003c/button\u003e\n      \u003c/div\u003e\n      \u003cul class=\"text-xs space-y-2.5 text-zinc-200 leading-relaxed mb-4\"\u003e\n        \u003cli\u003e\u003cstrong\u003e1. \u91cf\u5b50\u89c2\u6d4b\u574d\u7f29\uff1a\u003c/strong\u003e\u4f60\u7684\u624b\u7535\u7b52\u53ea\u6709\u4e00\u675f\u7a84\u89d2\u6247\u5f62\u5149\u3002\u4efb\u4f55\u88ab\u5149\u675f\u76f4\u63a5\u7167\u4eae\u7684\u7269\u4f53\u90fd\u4f1a\u8fdb\u5165\u201c\u88ab\u89c2\u6d4b\u6001\u201d\u3002\u5899\u58c1\u4f1a\u963b\u6321\u5149\u7ebf\u5f62\u6210\u89c6\u91ce\u76f2\u533a\u3002\u003c/li\u003e\n        \u003cli\u003e\u003cstrong\u003e2. \u600e\u4e48\u6253\u5f00\u5835\u6b7b\u7684\u91cf\u5b50\u5899\uff1f\u003c/strong\u003e\u5982\u679c\u7d2b\u8272\u865a\u7ebf\u3010\u91cf\u5b50\u4f2a\u5899\u3011\u6321\u4f4f\u4e86\u53bb\u8def\uff0c\u003cstrong\u003e\u5343\u4e07\u522b\u4e00\u76f4\u76ef\u7740\u5b83\u770b\u003c/strong\u003e\uff01\u628a\u89c6\u7ebf\u8f6c\u5f00\u6216\u6309 \u003ckbd class=\"px-1 border border-zinc-500\"\u003eSpace\u003c/kbd\u003e \u5173\u6389\u624b\u7535\u7b52\u8d70\u4e00\u6b65\uff0c\u5b83\u5c31\u4f1a\u5728\u9ed1\u6697\u4e2d\u79fb\u5f00\uff1b\u542c\u5230\u5f02\u52a8\u540e\u518d\u7acb\u523b\u5f00\u706f\u7167\u5411\u901a\u8def\uff0c\u5373\u53ef\u628a\u901a\u8def\u9501\u5b9a\uff01\u003c/li\u003e\n        \u003cli\u003e\u003cstrong\u003e3. \u4e24\u79cd\u76f8\u53cd\u7684\u602a\u8c08\u751f\u7269\uff1a\u003c/strong\u003e\u7ea2\u8272\u3010\u54ed\u6ce3\u96d5\u50cf\u3011\u53ea\u5728\u4f60\u770b\u4e0d\u89c1\u5b83\u65f6\u79fb\u52a8\uff0c\u7528\u5149\u76ef\u7740\u5b83\u5c31\u80fd\u5b9a\u4f4f\u5b83\uff1b\u800c\u7425\u73c0\u8272\u3010\u8d8b\u5149\u5f71\u602a\u3011\u6070\u6070\u76f8\u53cd\uff0c\u88ab\u5149\u7167\u5230\u624d\u4f1a\u8ffd\u6740\u4f60\uff0c\u5173\u706f\u6216\u79fb\u5f00\u89c6\u7ebf\u5b83\u5c31\u4f1a\u4f11\u7720\u3002\u003c/li\u003e\n        \u003cli\u003e\u003cstrong\u003e4. \u8bb0\u5fc6\u6b8b\u5f71\u4e0e\u58f0\u7eb9\uff1a\u003c/strong\u003e\u66fe\u7ecf\u7167\u4eae\u8fc7\u7684\u5730\u56fe\u4f1a\u7559\u4e0b\u6697\u6de1\u7684\u865a\u7ebf\u8bb0\u5fc6\u6b8b\u5f71\uff0c\u4f46\u76f2\u533a\u91cc\u7684\u7269\u4f53\u79fb\u52a8\u540e\uff0c\u6b8b\u5f71\u672a\u5fc5\u53ef\u4fe1\u2014\u2014\u7559\u610f\u9ed1\u6697\u4e2d\u4f20\u6765\u7684\u5706\u5f62\u003cstrong\u003e\u58f0\u6ce2\u6d9f\u6f2a\u003c/strong\u003e\u6216\u6309 \u003ckbd class=\"px-1 border border-zinc-500\"\u003eR\u003c/kbd\u003e \u91ca\u653e\u58f0\u5450\u8109\u51b2\uff01\u003c/li\u003e\n      \u003c/ul\u003e\n      \u003cdiv class=\"text-right\"\u003e\n        \u003cbutton id=\"btnConfirmRules\" class=\"btn-1bit active-mode px-4 py-1.5 text-xs font-bold\"\u003e\u660e\u767d\u5b88\u5219\uff0c\u5f00\u59cb\u89c2\u6d4b\u003c/button\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n  \u003c/div\u003e\n\n  \u003cscript\u003e\n    // =========================================================================\n    // 1-BIT FLASHLIGHT (\u624b\u7535\u7b52\u602a\u8c08) \u2014 SELF-CONTAINED QUANTUM STEALTH PUZZLE GAME\n    // =========================================================================\n\n    const PALETTES = [\n      {\n        name: '\u7ecf\u5178\u9ed1\u767d',\n        bg: '#07080a',\n        litFloor: '#e4e4e7',\n        litWall: '#18181b',\n        darkMemWall: '#27272a',\n        darkMemFloor: '#111217',\n        beamFill: 'rgba(255, 255, 255, 0.16)',\n        player: '#ffffff',\n        specterLit: '#71717a',\n        specterDark: '#ff2e55',\n        photovoreLit: '#f59e0b',\n        photovoreDark: '#52525b',\n        quantumWall: '#c084fc',\n        prism: '#38bdf8',\n        key: '#facc15',\n        exitOpen: '#4ade80',\n        exitLocked: '#a1a1aa'\n      },\n      {\n        name: '\u7425\u73c0\u8367\u5149',\n        bg: '#0c0800',\n        litFloor: '#ffb000',\n        litWall: '#291a00',\n        darkMemWall: '#3d2800',\n        darkMemFloor: '#170f00',\n        beamFill: 'rgba(255, 176, 0, 0.18)',\n        player: '#ffd166',\n        specterLit: '#8f6200',\n        specterDark: '#ff4d4d',\n        photovoreLit: '#ffffff',\n        photovoreDark: '#5c3d00',\n        quantumWall: '#ffd166',\n        prism: '#fff3b0',\n        key: '#ffffff',\n        exitOpen: '#ffd166',\n        exitLocked: '#7a5200'\n      },\n      {\n        name: '\u5e7d\u7eff\u591c\u89c6',\n        bg: '#030b05',\n        litFloor: '#39ff14',\n        litWall: '#09220c',\n        darkMemWall: '#113816',\n        darkMemFloor: '#061508',\n        beamFill: 'rgba(57, 255, 20, 0.16)',\n        player: '#bbf7d0',\n        specterLit: '#166534',\n        specterDark: '#ff3366',\n        photovoreLit: '#fde047',\n        photovoreDark: '#14532d',\n        quantumWall: '#67e8f9',\n        prism: '#a7f3d0',\n        key: '#fef08a',\n        exitOpen: '#4ade80',\n        exitLocked: '#15803d'\n      },\n      {\n        name: '\u6df1\u7ea2\u602a\u8c08',\n        bg: '#0c0305',\n        litFloor: '#fecdd3',\n        litWall: '#2b0910',\n        darkMemWall: '#4c0519',\n        darkMemFloor: '#190408',\n        beamFill: 'rgba(251, 113, 133, 0.18)',\n        player: '#ffffff',\n        specterLit: '#881337',\n        specterDark: '#ff003c',\n        photovoreLit: '#fbbf24',\n        photovoreDark: '#4c0519',\n        quantumWall: '#e879f9',\n        prism: '#38bdf8',\n        key: '#fde047',\n        exitOpen: '#4ade80',\n        exitLocked: '#9f1239'\n      }\n    ];\n\n    class SoundEngine {\n      constructor() {\n        this.ctx = null;\n        this.muted = false;\n      }\n      init() {\n        if (!this.ctx) {\n          const AudioCtx = window.AudioContext || window.webkitAudioContext;\n          if (AudioCtx) this.ctx = new AudioCtx();\n        }\n        if (this.ctx && this.ctx.state === 'suspended') {\n          this.ctx.resume();\n        }\n      }\n      playClick(on = true) {\n        if (this.muted) return;\n        this.init();\n        if (!this.ctx) return;\n        const osc = this.ctx.createOscillator();\n        const gain = this.ctx.createGain();\n        osc.type = 'square';\n        osc.frequency.setValueAtTime(on ? 920 : 480, this.ctx.currentTime);\n        osc.frequency.exponentialRampToValueAtTime(on ? 1320 : 240, this.ctx.currentTime + 0.045);\n        gain.gain.setValueAtTime(0.12, this.ctx.currentTime);\n        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);\n        osc.connect(gain);\n        gain.connect(this.ctx.destination);\n        osc.start();\n        osc.stop(this.ctx.currentTime + 0.055);\n      }\n      playStep(hasDarkMovement = false) {\n        if (this.muted) return;\n        this.init();\n        if (!this.ctx) return;\n        const now = this.ctx.currentTime;\n        const osc = this.ctx.createOscillator();\n        const gain = this.ctx.createGain();\n        osc.type = 'triangle';\n        osc.frequency.setValueAtTime(hasDarkMovement ? 115 : 160, now);\n        osc.frequency.exponentialRampToValueAtTime(55, now + 0.07);\n        gain.gain.setValueAtTime(hasDarkMovement ? 0.18 : 0.08, now);\n        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);\n        osc.connect(gain);\n        gain.connect(this.ctx.destination);\n        osc.start(now);\n        osc.stop(now + 0.08);\n      }\n      playQuantumShift() {\n        if (this.muted) return;\n        this.init();\n        if (!this.ctx) return;\n        const now = this.ctx.currentTime;\n        const osc = this.ctx.createOscillator();\n        const gain = this.ctx.createGain();\n        osc.type = 'sine';\n        osc.frequency.setValueAtTime(240, now);\n        osc.frequency.linearRampToValueAtTime(360, now + 0.09);\n        gain.gain.setValueAtTime(0.07, now);\n        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);\n        osc.connect(gain);\n        gain.connect(this.ctx.destination);\n        osc.start(now);\n        osc.stop(now + 0.11);\n      }\n      playSonar() {\n        if (this.muted) return;\n        this.init();\n        if (!this.ctx) return;\n        const now = this.ctx.currentTime;\n        const osc = this.ctx.createOscillator();\n        const gain = this.ctx.createGain();\n        osc.type = 'sine';\n        osc.frequency.setValueAtTime(780, now);\n        osc.frequency.exponentialRampToValueAtTime(260, now + 0.35);\n        gain.gain.setValueAtTime(0.16, now);\n        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);\n        osc.connect(gain);\n        gain.connect(this.ctx.destination);\n        osc.start(now);\n        osc.stop(now + 0.37);\n      }\n      playKeyPickup() {\n        if (this.muted) return;\n        this.init();\n        if (!this.ctx) return;\n        const now = this.ctx.currentTime;\n        [587.33, 880, 1174.66].forEach((freq, idx) =\u003e {\n          const osc = this.ctx.createOscillator();\n          const gain = this.ctx.createGain();\n          osc.type = 'square';\n          osc.frequency.setValueAtTime(freq, now + idx * 0.055);\n          gain.gain.setValueAtTime(0.1, now + idx * 0.055);\n          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.055 + 0.12);\n          osc.connect(gain);\n          gain.connect(this.ctx.destination);\n          osc.start(now + idx * 0.055);\n          osc.stop(now + idx * 0.055 + 0.13);\n        });\n      }\n      playWin() {\n        if (this.muted) return;\n        this.init();\n        if (!this.ctx) return;\n        const now = this.ctx.currentTime;\n        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) =\u003e {\n          const osc = this.ctx.createOscillator();\n          const gain = this.ctx.createGain();\n          osc.type = 'triangle';\n          osc.frequency.setValueAtTime(freq, now + idx * 0.08);\n          gain.gain.setValueAtTime(0.14, now + idx * 0.08);\n          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.22);\n          osc.connect(gain);\n          gain.connect(this.ctx.destination);\n          osc.start(now + idx * 0.08);\n          osc.stop(now + idx * 0.08 + 0.24);\n        });\n      }\n      playGameOver() {\n        if (this.muted) return;\n        this.init();\n        if (!this.ctx) return;\n        const now = this.ctx.currentTime;\n        [220, 196, 146.83, 98].forEach((freq, idx) =\u003e {\n          const osc = this.ctx.createOscillator();\n          const gain = this.ctx.createGain();\n          osc.type = 'sawtooth';\n          osc.frequency.setValueAtTime(freq, now + idx * 0.09);\n          gain.gain.setValueAtTime(0.15, now + idx * 0.09);\n          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.22);\n          osc.connect(gain);\n          gain.connect(this.ctx.destination);\n          osc.start(now + idx * 0.09);\n          osc.stop(now + idx * 0.09 + 0.25);\n        });\n      }\n    }\n\n    const sound = new SoundEngine();\n\n    const LEVELS = [\n      {\n        id: 1,\n        title: '\u7b2c 1 \u591c\uff1a\u522b\u79fb\u5f00\u89c6\u7ebf',\n        ruleBanner: '\u3010\u5b88\u5219 #1\u3011\u54ed\u6ce3\u96d5\u50cf(\ud83d\udc41)\u53ea\u5728\u9ed1\u6697\u4e2d\u79fb\u52a8\u3002\u7528\u5149\u675f\u7167\u4f4f\u5b83\u5373\u53ef\u5c06\u5176\u77f3\u5316\u5b9a\u8eab\uff01',\n        flavor: '\u8d70\u5eca\u5c3d\u5934\u6709\u4e00\u5c0a\u54ed\u6ce3\u96d5\u50cf\u3002\u53ea\u8981\u4f60\u7684\u624b\u7535\u7b52\u5149\u675f\u4e00\u76f4\u7b3c\u7f69\u7740\u5b83\uff0c\u5b83\u5c31\u662f\u4e00\u5757\u65e0\u5bb3\u7684\u77f3\u5934\uff1b\u4e00\u65e6\u4f60\u80cc\u8fc7\u8eab\u53bb\u62ff\u94a5\u5319\uff0c\u5b83\u5c31\u4f1a\u5728\u9ed1\u6697\u91cc\u5927\u6b65\u5411\u4f60\u8d34\u8fd1\u3002',\n        grid: [\n          \"###########\",\n          \"#S..#....K#\",\n          \"#...#.##..#\",\n          \"#.....#...#\",\n          \"###.###...#\",\n          \"#...#...W.#\",\n          \"#...#.....#\",\n          \"#...#####.#\",\n          \"#.........#\",\n          \"#.......E.#\",\n          \"###########\"\n        ]\n      },\n      {\n        id: 2,\n        title: '\u7b2c 2 \u591c\uff1a\u770b\u4e0d\u89c1\u7684\u5899\u5728\u52a8',\n        ruleBanner: '\u3010\u5b88\u5219 #2\u3011\u7d2b\u8272\u91cf\u5b50\u4f2a\u5899(\u2593)\u88ab\u5149\u7167\u5c04\u65f6\u4f1a\u9501\u6b7b\uff1b\u53ea\u6709\u79fb\u5f00\u89c6\u7ebf\u6216\u5173\u706f\u8d70\u4e00\u6b65\uff0c\u5b83\u624d\u4f1a\u5728\u9ed1\u6697\u4e2d\u79fb\u5f00\uff01',\n        flavor: '\u901a\u5f80\u94a5\u5319\u548c\u51fa\u53e3\u7684\u8d70\u5eca\u88ab\u7d2b\u8272\u300c\u91cf\u5b50\u4f2a\u5899\u300d\u5c01\u6b7b\u4e86\u3002\u5982\u679c\u4f60\u4e00\u76f4\u62ff\u624b\u7535\u7b52\u7167\u7740\u5b83\uff0c\u5b83\u6c38\u8fdc\u4e0d\u4f1a\u5f00\u95e8\u3002\u8bd5\u7740\u628a\u5149\u675f\u8f6c\u5411\u522b\u5904\uff08\u6216\u6309 Space \u5173\u706f\uff09\u8fc8\u51fa\u4e00\u6b65\uff0c\u542c\u89c1\u77f3\u5899\u6ed1\u52a8\u58f0\u540e\u518d\u7167\u8fc7\u53bb\uff01',\n        grid: [\n          \"###########\",\n          \"#S..Q....K#\",\n          \"###.#####.#\",\n          \"#...#...#.#\",\n          \"#.q.#.W...#\",\n          \"#.#.#.###.#\",\n          \"#.#...#...#\",\n          \"#.#####.Q.#\",\n          \"#.......#.#\",\n          \"#######.E.#\",\n          \"###########\"\n        ]\n      },\n      {\n        id: 3,\n        title: '\u7b2c 3 \u591c\uff1a\u504f\u632f\u68f1\u955c\u4e0e\u5939\u51fb',\n        ruleBanner: '\u3010\u5b88\u5219 #3\u3011\u624b\u7535\u5149\u675f\u7167\u4e2d\u504f\u632f\u68f1\u955c(\ud83e\ude9e)\u65f6\uff0c\u68f1\u955c\u4f1a\u5411\u5468\u56f4\u6298\u5c04\u51fa\u5168\u65b9\u4f4d\u89c2\u6d4b\u5149\u573a\uff0c\u540c\u65f6\u5b9a\u4f4f\u4e24\u4fa7\u96d5\u50cf\uff01',\n        flavor: '\u4e24\u5c0a\u54ed\u6ce3\u96d5\u50cf\u5206\u522b\u4ece\u5357\u5317\u4e24\u6761\u8d70\u5eca\u5305\u6284\u8fc7\u6765\uff0c\u4f60\u7684\u4e00\u675f\u7a84\u5149\u65e0\u6cd5\u540c\u65f6\u7167\u4f4f\u4e24\u8fb9\u3002\u5229\u7528\u5927\u5385\u4e2d\u592e\u7684\u300c\u504f\u632f\u68f1\u955c\u300d\uff0c\u8ba9\u6298\u5c04\u5149\u573a\u5e2e\u4f60\u9501\u4f4f\u80cc\u540e\u7684\u5a01\u80c1\uff01',\n        grid: [\n          \"###########\",\n          \"#W........#\",\n          \"#.###.###.#\",\n          \"#.#.....#.#\",\n          \"#...#M#...#\",\n          \"#S..K.M..E#\",\n          \"#...#M#...#\",\n          \"#.#.....#.#\",\n          \"#.###.###.#\",\n          \"#........W#\",\n          \"###########\"\n        ]\n      },\n      {\n        id: 4,\n        title: '\u7b2c 4 \u591c\uff1a\u6015\u5149\u7684\u4e0e\u559c\u5149\u7684',\n        ruleBanner: '\u3010\u5b88\u5219 #4\u3011\u7425\u73c0\u8272\u8d8b\u5149\u5f71\u602a(\ud83d\udd77)\u5728\u9ed1\u6697\u4e2d\u4f11\u7720\uff0c\u88ab\u624b\u7535\u7167\u4eae\u53cd\u800c\u4f1a\u6251\u5411\u4f60\uff01\u5b66\u4f1a\u53ca\u65f6\u6309 Space \u5173\u706f\u6f5c\u884c\u3002',\n        flavor: '\u8fd9\u4e00\u5c42\u540c\u65f6\u6e38\u8361\u7740\u300c\u54ed\u6ce3\u96d5\u50cf\u300d\u4e0e\u300c\u8d8b\u5149\u5f71\u602a\u300d\u3002\u7167\u4eae\u96d5\u50cf\u80fd\u4fdd\u547d\uff0c\u4f46\u7167\u4eae\u8d8b\u5149\u5f71\u602a\u4f1a\u5f15\u706b\u70e7\u8eab\u3002\u4f60\u9700\u8981\u7cbe\u786e\u63a7\u5236\u5149\u675f\u89d2\u5ea6\uff0c\u5fc5\u8981\u65f6\u679c\u65ad\u5173\u6389\u624b\u7535\u7b52\u4ece\u5f71\u602a\u8eab\u8fb9\u6478\u9ed1\u6e9c\u8fc7\u3002',\n        grid: [\n          \"###########\",\n          \"#S...#...K#\",\n          \"####.#.##.#\",\n          \"#P.....#..#\",\n          \"#.##.#...W#\",\n          \"#..#.#.####\",\n          \"#..P......#\",\n          \"#.####.##.#\",\n          \"#....Q..#.#\",\n          \"#.......E.#\",\n          \"###########\"\n        ]\n      },\n      {\n        id: 5,\n        title: '\u7b2c 5 \u591c\uff1a\u4e00\u683c\u6df1\u6e0a\u6838\u5fc3',\n        ruleBanner: '\u3010\u5b88\u5219 #5\u3011\u6536\u96c6 2 \u628a\u5c01\u5370\u94a5\u5319\u89e3\u9501\u6df1\u6e0a\u7535\u68af\u3002\u5584\u7528\u68f1\u955c\u6298\u5c04\u3001\u5173\u706f\u6f5c\u884c\u4e0e\u91cf\u5b50\u5899\u76f8\u4f4d\u5207\u6362\uff01',\n        flavor: '\u7ec8\u6781\u602a\u8c08\u6863\u6848\uff1a2 \u628a\u5c01\u5370\u94a5\u5319\u5206\u522b\u85cf\u5728\u91cf\u5b50\u5899\u4e0e\u53cc\u602a\u5939\u51fb\u7684\u5bc6\u5ba4\u4e2d\u3002\u4fdd\u6301\u51b7\u9759\uff0c\u89c2\u5bdf\u9ed1\u6697\u4e2d\u7684\u58f0\u6ce2\u6d9f\u6f2a\uff0c\u5fc5\u8981\u65f6\u6309 R \u91ca\u653e\u58f0\u5450\u8109\u51b2\u786e\u8ba4\u76f2\u533a\u4f4d\u7f6e\u3002',\n        grid: [\n          \"###########\",\n          \"#K..Q....W#\",\n          \"###.#####.#\",\n          \"#...M...#.#\",\n          \"#.###.#.P.#\",\n          \"#..S..#...#\",\n          \"#.###.###.#\",\n          \"#.#..M..#.#\",\n          \"#W..###.Q.#\",\n          \"#K......#E#\",\n          \"###########\"\n        ]\n      }\n    ];\n\n    const state = {\n      levelIndex: 0,\n      isProcedural: false,\n      paletteIndex: 0,\n      realtimeMode: false,\n      rows: 11,\n      cols: 11,\n      baseGrid: [],\n      quantumWalls: [],\n      prisms: [],\n      keys: [],\n      exit: { r: 9, c: 9 },\n      player: {\n        r: 1,\n        c: 1,\n        aimAngle: 0,\n        lightOn: true,\n        battery: 100\n      },\n      entities: [],\n      litMap: [],\n      memoryMap: [],\n      ripples: [],\n      sonarFlashTimer: 0,\n      steps: 0,\n      keysCollected: 0,\n      totalKeys: 1,\n      gameOver: false,\n      gameWon: false,\n      realtimeTimer: null\n    };\n\n    const canvas = document.getElementById('gameCanvas');\n    const ctx = canvas.getContext('2d');\n\n    function addAnomalyLog(msg, tone = 'normal') {\n      const box = document.getElementById('anomalyLog');\n      if (!box) return;\n      const line = document.createElement('div');\n      const colorClass =\n        tone === 'danger' ? 'text-rose-400 font-semibold' :\n        tone === 'quantum' ? 'text-purple-300' :\n        tone === 'good' ? 'text-emerald-400 font-semibold' :\n        'text-zinc-300';\n      line.className = `${colorClass} leading-tight`;\n      line.textContent = `[\u6b65${state.steps}] ${msg}`;\n      box.prepend(line);\n      while (box.children.length \u003e 30) {\n        box.removeChild(box.lastChild);\n      }\n    }\n\n    function renderLevelButtons() {\n      const container = document.getElementById('levelButtonsContainer');\n      container.innerHTML = '';\n      LEVELS.forEach((lvl, idx) =\u003e {\n        const btn = document.createElement('button');\n        const isCurrent = !state.isProcedural && state.levelIndex === idx;\n        btn.className = `btn-1bit py-1.5 text-xs font-bold ${isCurrent ? 'active-mode' : ''}`;\n        btn.textContent = `\u591c ${idx + 1}`;\n        btn.addEventListener('click', () =\u003e {\n          state.isProcedural = false;\n          loadLevel(idx);\n        });\n        container.appendChild(btn);\n      });\n      const randBtn = document.getElementById('btnRandomMaze');\n      if (state.isProcedural) {\n        randBtn.classList.add('active-mode');\n      } else {\n        randBtn.classList.remove('active-mode');\n      }\n    }\n\n    function generateProceduralGrid() {\n      const size = 11;\n      const g = Array.from({ length: size }, () =\u003e Array(size).fill('.'));\n      for (let r = 0; r \u003c size; r++) {\n        for (let c = 0; c \u003c size; c++) {\n          if (r === 0 || r === size - 1 || c === 0 || c === size - 1) {\n            g[r][c] = '#';\n          } else if (r % 2 === 0 && c % 2 === 0 && Math.random() \u003c 0.65) {\n            g[r][c] = '#';\n            const dirs = [[0,1],[0,-1],[1,0],[-1,0]];\n            const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];\n            if (r + dr \u003e 1 && r + dr \u003c size - 2 && c + dc \u003e 1 && c + dc \u003c size - 2) {\n              g[r + dr][c + dc] = Math.random() \u003c 0.35 ? 'Q' : '#';\n            }\n          }\n        }\n      }\n      g[1][1] = 'S';\n      g[1][2] = '.';\n      g[2][1] = '.';\n      g[size - 2][size - 2] = 'E';\n      g[size - 2][size - 3] = '.';\n      g[size - 3][size - 2] = '.';\n      g[5][5] = 'M';\n      g[1][size - 2] = 'K';\n      g[size - 2][1] = 'K';\n      g[3][size - 3] = 'W';\n      g[size - 3][3] = 'W';\n      g[5][7] = 'P';\n      return g.map(row =\u003e row.join(''));\n    }\n\n    function loadLevel(index, procedural = false) {\n      state.isProcedural = procedural;\n      state.levelIndex = index;\n      const lvlObj = procedural\n        ? {\n            title: '\u65e0\u5c3d\u591c\uff1a\u968f\u673a\u602a\u8c08\u8ff7\u5bab',\n            ruleBanner: '\u3010\u65e0\u5c3d\u602a\u8c08\u6863\u6848\u3011\u6536\u96c6 2 \u628a\u5c01\u5370\u94a5\u5319\u5e76\u9003\u5f80\u51fa\u53e3\u3002\u6240\u6709\u91cf\u5b50\u602a\u8c08\u6cd5\u5219\u540c\u65f6\u751f\u6548\uff01',\n            flavor: '\u6bcf\u6b21\u751f\u6210\u7684\u8ff7\u5bab\u90fd\u5305\u542b\u91cf\u5b50\u4f2a\u5899\u3001\u504f\u632f\u68f1\u955c\u3001\u54ed\u6ce3\u96d5\u50cf\u4e0e\u8d8b\u5149\u5f71\u602a\u3002\u7075\u6d3b\u5207\u6362\u5f00\u5173\u706f\u4e0e\u89c6\u7ebf\u65b9\u5411\uff01',\n            grid: generateProceduralGrid()\n          }\n        : LEVELS[index];\n\n      const raw = lvlObj.grid;\n      state.rows = raw.length;\n      state.cols = raw[0].length;\n      state.baseGrid = [];\n      state.quantumWalls = [];\n      state.prisms = [];\n      state.keys = [];\n      state.entities = [];\n      state.ripples = [];\n      state.litMap = Array.from({ length: state.rows }, () =\u003e Array(state.cols).fill(false));\n      state.memoryMap = Array.from({ length: state.rows }, () =\u003e Array(state.cols).fill(false));\n      state.steps = 0;\n      state.keysCollected = 0;\n      state.sonarFlashTimer = 0;\n      state.gameOver = false;\n      state.gameWon = false;\n\n      let entId = 1;\n      for (let r = 0; r \u003c state.rows; r++) {\n        const rowArr = [];\n        for (let c = 0; c \u003c state.cols; c++) {\n          const ch = raw[r][c];\n          if (ch === '#') {\n            rowArr.push('#');\n          } else {\n            rowArr.push('.');\n            if (ch === 'S') {\n              state.player.r = r;\n              state.player.c = c;\n              state.player.aimAngle = 0;\n              state.player.lightOn = true;\n              state.player.battery = 100;\n            } else if (ch === 'K') {\n              state.keys.push({ r, c, collected: false });\n            } else if (ch === 'E') {\n              state.exit = { r, c };\n            } else if (ch === 'W') {\n              state.entities.push({ id: entId++, type: 'specter', r, c, lit: false });\n            } else if (ch === 'P') {\n              state.entities.push({ id: entId++, type: 'photovore', r, c, lit: false });\n            } else if (ch === 'Q') {\n              state.quantumWalls.push({ r, c, closed: true, lockedByLight: false });\n            } else if (ch === 'q') {\n              state.quantumWalls.push({ r, c, closed: false, lockedByLight: false });\n            } else if (ch === 'M') {\n              state.prisms.push({ r, c, active: false });\n            }\n          }\n        }\n        state.baseGrid.push(rowArr);\n      }\n\n      state.totalKeys = state.keys.length;\n      document.getElementById('hudLevelTitle').textContent = lvlObj.title;\n      document.getElementById('bannerRuleText').textContent = lvlObj.ruleBanner;\n      document.getElementById('levelFlavorText').textContent = lvlObj.flavor;\n      document.getElementById('overlayModal').classList.add('hidden');\n      document.getElementById('anomalyLog').innerHTML = '';\n\n      renderLevelButtons();\n      recalculateLighting();\n      updateHUD();\n      addAnomalyLog(`\u8fdb\u5165\u300c${lvlObj.title}\u300d\uff0c\u624b\u7535\u7b52\u5df2\u5f00\u542f\u3002`, 'good');\n      drawScene();\n    }\n\n    function isOpaqueWall(r, c) {\n      if (r \u003c 0 || r \u003e= state.rows || c \u003c 0 || c \u003e= state.cols) return true;\n      if (state.baseGrid[r][c] === '#') return true;\n      const qw = state.quantumWalls.find(q =\u003e q.r === r && q.c === c);\n      if (qw && qw.closed) return true;\n      return false;\n    }\n\n    function isWalkableForPlayer(r, c) {\n      if (isOpaqueWall(r, c)) return false;\n      const prism = state.prisms.find(p =\u003e p.r === r && p.c === c);\n      if (prism) return false;\n      return true;\n    }\n\n    function hasLineOfSight(r0, c0, r1, c1) {\n      const x0 = c0 + 0.5;\n      const y0 = r0 + 0.5;\n      const x1 = c1 + 0.5;\n      const y1 = r1 + 0.5;\n      const dx = x1 - x0;\n      const dy = y1 - y0;\n      const dist = Math.hypot(dx, dy);\n      const steps = Math.ceil(dist * 6);\n      for (let i = 1; i \u003c steps; i++) {\n        const t = i / steps;\n        const cx = Math.floor(x0 + dx * t);\n        const cy = Math.floor(y0 + dy * t);\n        if (cy === r1 && cx === c1) return true;\n        if (cy === r0 && cx === c0) continue;\n        if (isOpaqueWall(cy, cx)) return false;\n      }\n      return true;\n    }\n\n    function angleDiff(a, b) {\n      let d = a - b;\n      while (d \u003e Math.PI) d -= Math.PI * 2;\n      while (d \u003c -Math.PI) d += Math.PI * 2;\n      return d;\n    }\n\n    function recalculateLighting() {\n      for (let r = 0; r \u003c state.rows; r++) {\n        for (let c = 0; c \u003c state.cols; c++) {\n          state.litMap[r][c] = false;\n        }\n      }\n\n      const pr = state.player.r;\n      const pc = state.player.c;\n      state.litMap[pr][pc] = true;\n      state.memoryMap[pr][pc] = true;\n\n      if (state.player.lightOn && state.player.battery \u003e 0) {\n        const coneHalfAngle = 0.44;\n        const maxRange = 7.5;\n\n        for (let r = 0; r \u003c state.rows; r++) {\n          for (let c = 0; c \u003c state.cols; c++) {\n            const dr = r - pr;\n            const dc = c - pc;\n            const dist = Math.hypot(dr, dc);\n            if (dist \u003c= 1.1) {\n              const ang = Math.atan2(dr, dc);\n              if (Math.abs(angleDiff(ang, state.player.aimAngle)) \u003c= 1.15) {\n                state.litMap[r][c] = true;\n                state.memoryMap[r][c] = true;\n              }\n            }\n            if (dist \u003c= maxRange && dist \u003e 0) {\n              const ang = Math.atan2(dr, dc);\n              if (Math.abs(angleDiff(ang, state.player.aimAngle)) \u003c= coneHalfAngle) {\n                if (hasLineOfSight(pr, pc, r, c)) {\n                  state.litMap[r][c] = true;\n                  state.memoryMap[r][c] = true;\n                }\n              }\n            }\n          }\n        }\n      }\n\n      state.prisms.forEach(p =\u003e {\n        p.active = state.litMap[p.r][p.c];\n        if (p.active) {\n          for (let r = 0; r \u003c state.rows; r++) {\n            for (let c = 0; c \u003c state.cols; c++) {\n              if (Math.hypot(r - p.r, c - p.c) \u003c= 3.2 && hasLineOfSight(p.r, p.c, r, c)) {\n                state.litMap[r][c] = true;\n                state.memoryMap[r][c] = true;\n              }\n            }\n          }\n        }\n      });\n\n      state.quantumWalls.forEach(qw =\u003e {\n        qw.lockedByLight = state.litMap[qw.r][qw.c];\n      });\n      state.entities.forEach(ent =\u003e {\n        ent.lit = state.litMap[ent.r][ent.c];\n      });\n    }\n\n    function getNextStepToward(startR, startC, targetR, targetC) {\n      const queue = [[startR, startC, []]];\n      const visited = Array.from({ length: state.rows }, () =\u003e Array(state.cols).fill(false));\n      visited[startR][startC] = true;\n      const dirs = [[-1,0],[1,0],[0,-1],[0,1]];\n\n      while (queue.length \u003e 0) {\n        const [r, c, path] = queue.shift();\n        if (r === targetR && c === targetC) {\n          return path.length \u003e 0 ? path[0] : [startR, startC];\n        }\n        for (const [dr, dc] of dirs) {\n          const nr = r + dr;\n          const nc = c + dc;\n          if (nr \u003e= 0 && nr \u003c state.rows && nc \u003e= 0 && nc \u003c state.cols && !visited[nr][nc]) {\n            const isTarget = nr === targetR && nc === targetC;\n            const occupiedByOtherEntity = state.entities.some(e =\u003e e.r === nr && e.c === nc);\n            const occupiedByPrism = state.prisms.some(p =\u003e p.r === nr && p.c === nc);\n            if (!isOpaqueWall(nr, nc) && !occupiedByPrism && (isTarget || !occupiedByOtherEntity)) {\n              visited[nr][nc] = true;\n              queue.push([nr, nc, [...path, [nr, nc]]]);\n            }\n          }\n        }\n      }\n      return [startR, startC];\n    }\n\n    function addSoundRipple(r, c, color = '#ff3b5c', maxRadius = 1.6) {\n      state.ripples.push({ r, c, radius: 0.15, maxRadius, alpha: 0.95, color });\n    }\n\n    function advanceWorldTurn() {\n      if (state.gameOver || state.gameWon) return;\n      state.steps++;\n\n      if (state.player.lightOn) {\n        const watchingSpecter = state.entities.some(e =\u003e e.type === 'specter' && e.lit);\n        const drain = watchingSpecter ? 3 : 1.5;\n        state.player.battery = Math.max(0, Math.round((state.player.battery - drain) * 10) / 10);\n        if (state.player.battery \u003c= 0) {\n          state.player.lightOn = false;\n          addAnomalyLog('\u26a0\ufe0f \u624b\u7535\u7b52\u7535\u91cf\u8017\u5c3d\uff01\u9677\u5165\u5b8c\u5168\u9ed1\u6697\uff0c\u5173\u706f\u79fb\u52a8\u53ef\u7f13\u6162\u6062\u590d\u5907\u7528\u7535\u5bb9\u3002', 'danger');\n        }\n      } else {\n        state.player.battery = Math.min(100, Math.round((state.player.battery + 4) * 10) / 10);\n      }\n\n      recalculateLighting();\n\n      let wallShiftedCount = 0;\n      state.quantumWalls.forEach(qw =\u003e {\n        const hasEntityOrPlayer =\n          (state.player.r === qw.r && state.player.c === qw.c) ||\n          state.entities.some(e =\u003e e.r === qw.r && e.c === qw.c);\n        if (!qw.lockedByLight && !hasEntityOrPlayer) {\n          qw.closed = !qw.closed;\n          wallShiftedCount++;\n          addSoundRipple(qw.r, qw.c, '#c084fc', 1.25);\n        }\n      });\n\n      if (wallShiftedCount \u003e 0) {\n        sound.playQuantumShift();\n        addAnomalyLog(`\u76f2\u533a\u4e2d\u6709 ${wallShiftedCount} \u5904\u91cf\u5b50\u4f2a\u5899\u53d1\u751f\u4e86\u76f8\u4f4d\u79fb\u52a8\u2026`, 'quantum');\n      }\n\n      recalculateLighting();\n\n      state.keys.forEach(k =\u003e {\n        if (!k.collected && k.r === state.player.r && k.c === state.player.c) {\n          k.collected = true;\n          state.keysCollected++;\n          sound.playKeyPickup();\n          addSoundRipple(k.r, k.c, '#facc15', 2.0);\n          addAnomalyLog(`\u62fe\u53d6\u4e86\u5c01\u5370\u94a5\u5319 (${state.keysCollected}/${state.totalKeys})\uff01`, 'good');\n        }\n      });\n\n      if (\n        state.player.r === state.exit.r &&\n        state.player.c === state.exit.c &&\n        state.keysCollected \u003e= state.totalKeys\n      ) {\n        triggerVictory();\n        return;\n      }\n\n      let darkFootsteps = 0;\n      for (const ent of state.entities) {\n        if (ent.r === state.player.r && ent.c === state.player.c) {\n          triggerGameOver(ent.type);\n          return;\n        }\n\n        if (ent.type === 'specter') {\n          if (!ent.lit) {\n            const [nr, nc] = getNextStepToward(ent.r, ent.c, state.player.r, state.player.c);\n            if (nr !== ent.r || nc !== ent.c) {\n              ent.r = nr;\n              ent.c = nc;\n              darkFootsteps++;\n              addSoundRipple(ent.r, ent.c, '#ff2e55', 1.55);\n            }\n          }\n        } else if (ent.type === 'photovore') {\n          if (ent.lit) {\n            const [nr, nc] = getNextStepToward(ent.r, ent.c, state.player.r, state.player.c);\n            if (nr !== ent.r || nc !== ent.c) {\n              ent.r = nr;\n              ent.c = nc;\n              addSoundRipple(ent.r, ent.c, '#f59e0b', 1.55);\n              addAnomalyLog('\u26a0\ufe0f \u8d8b\u5149\u5f71\u602a\u88ab\u624b\u7535\u5f3a\u5149\u6fc0\u6012\uff0c\u6b63\u5411\u4f60\u903c\u8fd1\uff01', 'danger');\n            }\n          }\n        }\n\n        if (ent.r === state.player.r && ent.c === state.player.c) {\n          recalculateLighting();\n          triggerGameOver(ent.type);\n          return;\n        }\n      }\n\n      recalculateLighting();\n      sound.playStep(darkFootsteps \u003e 0);\n\n      const noiseEl = document.getElementById('hudNoiseStatus');\n      if (darkFootsteps \u003e 0) {\n        noiseEl.textContent = `\u26a0\ufe0f ${darkFootsteps}\u5904\u811a\u6b65`;\n        noiseEl.className = 'text-rose-400 font-bold animate-pulse';\n        addAnomalyLog(`\u9ed1\u6697\u76f2\u533a\u4f20\u6765 ${darkFootsteps} \u9635\u6c89\u91cd\u7684\u77f3\u50cf\u632a\u52a8\u58f0\uff01`, 'danger');\n      } else {\n        noiseEl.textContent = '\u5b89\u9759';\n        noiseEl.className = 'text-emerald-400';\n      }\n\n      updateHUD();\n      drawScene();\n    }\n\n    function triggerVictory() {\n      state.gameWon = true;\n      sound.playWin();\n      updateHUD();\n      drawScene();\n      const modal = document.getElementById('overlayModal');\n      document.getElementById('modalTag').textContent = '\u89c2\u6d4b\u6863\u6848\u5b8c\u6210';\n      document.getElementById('modalTag').className = 'inline-block px-2 py-0.5 text-xs font-bold bg-emerald-400 text-black mb-2';\n      document.getElementById('modalTitle').textContent = '\u6210\u529f\u9003\u51fa\u602a\u8c08\u5c42\uff01';\n      document.getElementById('modalDesc').textContent =\n        `\u4f60\u7528 ${state.steps} \u6b65\u89e3\u5f00\u4e86\u91cf\u5b50\u89c2\u6d4b\u5c01\u9501\uff0c\u5269\u4f59\u7535\u91cf ${Math.round(state.player.battery)}%\u3002\u51c6\u5907\u597d\u8fce\u63a5\u66f4\u8be1\u5f02\u7684\u4e0b\u4e00\u591c\u5b88\u5219\u4e86\u5417\uff1f`;\n      modal.classList.remove('hidden');\n      addAnomalyLog('\ud83c\udf89 \u6210\u529f\u62b5\u8fbe\u89e3\u9501\u7684\u6df1\u6e0a\u7535\u68af\uff0c\u987a\u5229\u8131\u51fa\uff01', 'good');\n    }\n\n    function triggerGameOver(killerType) {\n      state.gameOver = true;\n      sound.playGameOver();\n      updateHUD();\n      drawScene();\n      const modal = document.getElementById('overlayModal');\n      document.getElementById('modalTag').textContent = '\u89c2\u6d4b\u574d\u7f29\u5931\u8d25';\n      document.getElementById('modalTag').className = 'inline-block px-2 py-0.5 text-xs font-bold bg-rose-500 text-white mb-2';\n      document.getElementById('modalTitle').textContent =\n        killerType === 'specter' ? '\u88ab\u9ed1\u6697\u4e2d\u7684\u54ed\u6ce3\u96d5\u50cf\u6355\u83b7' : '\u88ab\u72c2\u66b4\u7684\u8d8b\u5149\u5f71\u602a\u541e\u566c';\n      document.getElementById('modalDesc').textContent =\n        killerType === 'specter'\n          ? '\u3010\u6b7b\u56e0\u5206\u6790\u3011\u54ed\u6ce3\u96d5\u50cf\u5728\u4f60\u7684\u624b\u7535\u76f2\u533a\u4e2d\u6084\u6084\u8d34\u8fd1\u4e86\u4f60\u3002\u8bb0\u4f4f\uff1a\u7528\u5149\u675f\u7167\u4f4f\u5b83\u6216\u8005\u5229\u7528\u504f\u632f\u68f1\u955c\u6298\u5c04\u5149\u7ebf\uff0c\u624d\u80fd\u5c06\u5b83\u77f3\u5316\u5b9a\u8eab\uff01'\n          : '\u3010\u6b7b\u56e0\u5206\u6790\u3011\u8d8b\u5149\u5f71\u602a\u88ab\u4f60\u7684\u624b\u7535\u7b52\u5149\u675f\u5524\u9192\u5e76\u6251\u5411\u4e86\u4f60\u3002\u9047\u5230\u7425\u73c0\u8272\u5f71\u602a\u65f6\uff0c\u8bf7\u6309 Space \u5173\u706f\u6216\u79fb\u5f00\u89c6\u7ebf\u4ece\u5b83\u8eab\u65c1\u6f5c\u884c\uff01';\n      modal.classList.remove('hidden');\n      addAnomalyLog('\ud83d\udc80 \u4fe1\u53f7\u4e2d\u65ad\uff1a\u89c2\u6d4b\u8005\u5df2\u88ab\u602a\u8c08\u541e\u566c\u3002', 'danger');\n    }\n\n    function tryMovePlayer(dr, dc) {\n      if (state.gameOver || state.gameWon) return;\n      const nr = state.player.r + dr;\n      const nc = state.player.c + dc;\n      if (!isWalkableForPlayer(nr, nc)) {\n        addSoundRipple(nr, nc, '#71717a', 0.6);\n        drawScene();\n        return;\n      }\n      state.player.r = nr;\n      state.player.c = nc;\n      advanceWorldTurn();\n    }\n\n    function rotateFlashlight(deltaRad) {\n      if (state.gameOver || state.gameWon) return;\n      state.player.aimAngle += deltaRad;\n      recalculateLighting();\n      drawScene();\n    }\n\n    function toggleFlashlight() {\n      if (state.gameOver || state.gameWon) return;\n      if (!state.player.lightOn && state.player.battery \u003c= 0) {\n        addAnomalyLog('\u7535\u6c60\u8017\u5c3d\uff0c\u8bf7\u5148\u5728\u6697\u5904\u79fb\u52a8\u4e00\u6b65\u6062\u590d\u7535\u5bb9\uff01', 'danger');\n        return;\n      }\n      state.player.lightOn = !state.player.lightOn;\n      sound.playClick(state.player.lightOn);\n      recalculateLighting();\n      updateHUD();\n      drawScene();\n      addAnomalyLog(\n        state.player.lightOn ? '\ud83d\udd26 \u5f00\u542f\u624b\u7535\u7b52\uff1a\u5149\u9525\u5185\u7684\u7269\u4f53\u5df2\u88ab\u89c2\u6d4b\u9501\u5b9a\u3002' : '\ud83c\udf11 \u5173\u95ed\u624b\u7535\u7b52\uff1a\u4e16\u754c\u8fdb\u5165\u672a\u89c2\u6d4b\u53e0\u52a0\u6001\u3002'\n      );\n    }\n\n    function triggerSonarPing() {\n      if (state.gameOver || state.gameWon) return;\n      if (state.player.battery \u003c 12) {\n        addAnomalyLog('\u7535\u91cf\u4e0d\u8db3 12%\uff0c\u65e0\u6cd5\u53d1\u5c04\u58f0\u5450\u8109\u51b2\uff01', 'danger');\n        return;\n      }\n      state.player.battery = Math.max(0, state.player.battery - 12);\n      state.sonarFlashTimer = 38;\n      sound.playSonar();\n      addSoundRipple(state.player.r, state.player.c, '#38bdf8', 5.5);\n      state.entities.forEach(e =\u003e {\n        addSoundRipple(e.r, e.c, e.type === 'specter' ? '#ff2e55' : '#f59e0b', 1.8);\n      });\n      updateHUD();\n      addAnomalyLog('\ud83d\udce1 \u53d1\u5c04\u58f0\u5450\u8109\u51b2\uff1a\u77ed\u6682\u663e\u5f71\u5168\u56fe\u6697\u5904\u602a\u8c08\u8f6e\u5ed3\uff01', 'good');\n    }\n\n    function updateHUD() {\n      const badge = document.getElementById('hudLightBadge');\n      if (state.player.lightOn) {\n        badge.textContent = 'ON';\n        badge.className = 'px-1.5 py-0.5 text-[11px] font-bold bg-white text-black';\n      } else {\n        badge.textContent = 'OFF';\n        badge.className = 'px-1.5 py-0.5 text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-600';\n      }\n      const pct = Math.round(state.player.battery);\n      document.getElementById('hudBatteryBar').style.width = `${pct}%`;\n      document.getElementById('hudBatteryText').textContent = `${pct}%`;\n      document.getElementById('hudKeys').textContent = `${state.keysCollected} / ${state.totalKeys} \ud83d\udddd\ufe0f`;\n      const doorEl = document.getElementById('hudDoorState');\n      if (state.keysCollected \u003e= state.totalKeys) {\n        doorEl.textContent = '(\u5df2\u5f00\u542f!)';\n        doorEl.className = 'text-[11px] text-emerald-400 font-bold';\n      } else {\n        doorEl.textContent = '(\u672a\u89e3\u9501)';\n        doorEl.className = 'text-[11px] text-zinc-400';\n      }\n      document.getElementById('hudSteps').textContent = String(state.steps);\n    }\n\n    function resizeCanvas() {\n      const wrapper = document.getElementById('canvasWrapper');\n      if (!wrapper) return;\n      const rect = wrapper.getBoundingClientRect();\n      const size = Math.max(280, Math.floor(Math.min(rect.width, rect.height)));\n      if (canvas.width !== size || canvas.height !== size) {\n        canvas.width = size;\n        canvas.height = size;\n      }\n      drawScene();\n    }\n\n    function drawScene() {\n      const pal = PALETTES[state.paletteIndex];\n      const W = canvas.width;\n      const H = canvas.height;\n      const tileW = W / state.cols;\n      const tileH = H / state.rows;\n\n      ctx.fillStyle = pal.bg;\n      ctx.fillRect(0, 0, W, H);\n\n      if (state.player.lightOn && state.player.battery \u003e 0) {\n        const px = (state.player.c + 0.5) * tileW;\n        const py = (state.player.r + 0.5) * tileH;\n        const coneHalf = 0.44;\n        const maxDist = 7.5 * tileW;\n        ctx.save();\n        ctx.beginPath();\n        ctx.moveTo(px, py);\n        const rayCount = 48;\n        for (let i = 0; i \u003c= rayCount; i++) {\n          const ang = state.player.aimAngle - coneHalf + (coneHalf * 2 * i) / rayCount;\n          let hitX = px + Math.cos(ang) * maxDist;\n          let hitY = py + Math.sin(ang) * maxDist;\n          for (let d = 0.2; d \u003c= 7.5; d += 0.12) {\n            const tx = state.player.c + 0.5 + Math.cos(ang) * d;\n            const ty = state.player.r + 0.5 + Math.sin(ang) * d;\n            const cr = Math.floor(ty);\n            const cc = Math.floor(tx);\n            if (isOpaqueWall(cr, cc)) {\n              hitX = tx * tileW;\n              hitY = ty * tileH;\n              break;\n            }\n          }\n          ctx.lineTo(hitX, hitY);\n        }\n        ctx.closePath();\n        ctx.fillStyle = pal.beamFill;\n        ctx.fill();\n        ctx.restore();\n      }\n\n      for (let r = 0; r \u003c state.rows; r++) {\n        for (let c = 0; c \u003c state.cols; c++) {\n          const x = c * tileW;\n          const y = r * tileH;\n          const isLit = state.litMap[r][c];\n          const inMemory = state.memoryMap[r][c];\n          const isSolidBase = state.baseGrid[r][c] === '#';\n          const qw = state.quantumWalls.find(q =\u003e q.r === r && q.c === c);\n\n          if (isLit) {\n            if (isSolidBase) {\n              ctx.fillStyle = pal.litWall;\n              ctx.fillRect(x, y, tileW, tileH);\n              ctx.strokeStyle = pal.litFloor;\n              ctx.lineWidth = 1.5;\n              ctx.strokeRect(x + 2, y + 2, tileW - 4, tileH - 4);\n              ctx.beginPath();\n              ctx.moveTo(x + 3, y + tileH - 3);\n              ctx.lineTo(x + tileW - 3, y + 3);\n              ctx.stroke();\n            } else if (qw) {\n              ctx.fillStyle = qw.closed ? '#2e1065' : pal.litFloor;\n              ctx.fillRect(x + 1, y + 1, tileW - 2, tileH - 2);\n              ctx.strokeStyle = pal.quantumWall;\n              ctx.lineWidth = 2;\n              ctx.strokeRect(x + 3, y + 3, tileW - 6, tileH - 6);\n              ctx.fillStyle = qw.closed ? pal.quantumWall : '#18181b';\n              ctx.font = `bold ${Math.floor(tileW * 0.36)}px \"JetBrains Mono\", monospace`;\n              ctx.textAlign = 'center';\n              ctx.textBaseline = 'middle';\n              ctx.fillText(qw.closed ? '\ud83d\udd12\u5899' : '\ud83d\udd12\u901a', x + tileW / 2, y + tileH / 2);\n            } else {\n              ctx.fillStyle = pal.litFloor;\n              ctx.fillRect(x + 0.5, y + 0.5, tileW - 1, tileH - 1);\n              ctx.fillStyle = pal.bg;\n              ctx.fillRect(x + tileW / 2 - 1, y + tileH / 2 - 1, 2, 2);\n            }\n          } else if (inMemory || state.sonarFlashTimer \u003e 0) {\n            if (isSolidBase) {\n              ctx.fillStyle = pal.darkMemWall;\n              ctx.fillRect(x + 2, y + 2, tileW - 4, tileH - 4);\n              ctx.strokeStyle = '#3f3f46';\n              ctx.lineWidth = 1;\n              ctx.strokeRect(x + 3, y + 3, tileW - 6, tileH - 6);\n            } else if (qw) {\n              ctx.strokeStyle = pal.quantumWall;\n              ctx.lineWidth = 1;\n              ctx.setLineDash([3, 3]);\n              ctx.strokeRect(x + 4, y + 4, tileW - 8, tileH - 8);\n              ctx.setLineDash([]);\n              ctx.fillStyle = pal.quantumWall;\n              ctx.font = `${Math.floor(tileW * 0.34)}px \"JetBrains Mono\", monospace`;\n              ctx.textAlign = 'center';\n              ctx.textBaseline = 'middle';\n              ctx.fillText(qw.closed ? '\u2593?' : '\u00b7?', x + tileW / 2, y + tileH / 2);\n            } else {\n              ctx.fillStyle = pal.darkMemFloor;\n              ctx.fillRect(x + 2, y + 2, tileW - 4, tileH - 4);\n            }\n          }\n        }\n      }\n\n      state.prisms.forEach(p =\u003e {\n        const isLit = state.litMap[p.r][p.c];\n        const inMem = state.memoryMap[p.r][p.c] || state.sonarFlashTimer \u003e 0;\n        if (!isLit && !inMem) return;\n        const cx = (p.c + 0.5) * tileW;\n        const cy = (p.r + 0.5) * tileH;\n        const rad = tileW * 0.34;\n        ctx.save();\n        ctx.translate(cx, cy);\n        if (p.active) {\n          ctx.strokeStyle = pal.prism;\n          ctx.lineWidth = 2;\n          ctx.beginPath();\n          ctx.arc(0, 0, tileW * 0.45, 0, Math.PI * 2);\n          ctx.stroke();\n        }\n        ctx.fillStyle = isLit ? pal.prism : '#1e293b';\n        ctx.strokeStyle = pal.prism;\n        ctx.lineWidth = 2;\n        ctx.beginPath();\n        ctx.moveTo(0, -rad);\n        ctx.lineTo(rad, 0);\n        ctx.lineTo(0, rad);\n        ctx.lineTo(-rad, 0);\n        ctx.closePath();\n        ctx.fill();\n        ctx.stroke();\n        ctx.restore();\n      });\n\n      state.keys.forEach(k =\u003e {\n        if (k.collected) return;\n        const isLit = state.litMap[k.r][k.c];\n        const inMem = state.memoryMap[k.r][k.c] || state.sonarFlashTimer \u003e 0;\n        if (!isLit && !inMem) return;\n        const cx = (k.c + 0.5) * tileW;\n        const cy = (k.r + 0.5) * tileH;\n        ctx.save();\n        ctx.fillStyle = isLit ? '#18181b' : pal.key;\n        ctx.strokeStyle = pal.key;\n        ctx.lineWidth = 2;\n        ctx.beginPath();\n        ctx.arc(cx, cy, tileW * 0.32, 0, Math.PI * 2);\n        ctx.fill();\n        ctx.stroke();\n        ctx.font = `bold ${Math.floor(tileW * 0.44)}px sans-serif`;\n        ctx.textAlign = 'center';\n        ctx.textBaseline = 'middle';\n        ctx.fillText('\ud83d\udddd', cx, cy + 1);\n        ctx.restore();\n      });\n\n      {\n        const er = state.exit.r;\n        const ec = state.exit.c;\n        const x = ec * tileW;\n        const y = er * tileH;\n        const unlocked = state.keysCollected \u003e= state.totalKeys;\n        ctx.save();\n        ctx.strokeStyle = unlocked ? pal.exitOpen : pal.exitLocked;\n        ctx.lineWidth = 2.5;\n        ctx.strokeRect(x + 4, y + 4, tileW - 8, tileH - 8);\n        ctx.fillStyle = unlocked ? pal.exitOpen : pal.exitLocked;\n        ctx.font = `bold ${Math.floor(tileW * 0.38)}px \"JetBrains Mono\", monospace`;\n        ctx.textAlign = 'center';\n        ctx.textBaseline = 'middle';\n        ctx.fillText(unlocked ? 'EXIT' : 'LOCK', x + tileW / 2, y + tileH / 2);\n        ctx.restore();\n      }\n\n      state.entities.forEach(ent =\u003e {\n        const isLit = ent.lit;\n        const revealBySonar = state.sonarFlashTimer \u003e 0 || state.gameOver;\n        if (!isLit && !revealBySonar) return;\n\n        const cx = (ent.c + 0.5) * tileW;\n        const cy = (ent.r + 0.5) * tileH;\n        ctx.save();\n        if (ent.type === 'specter') {\n          ctx.fillStyle = isLit ? '#27272a' : '#4c0519';\n          ctx.strokeStyle = isLit ? '#ffffff' : pal.specterDark;\n          ctx.lineWidth = 2.2;\n          ctx.beginPath();\n          ctx.arc(cx, cy, tileW * 0.36, 0, Math.PI * 2);\n          ctx.fill();\n          ctx.stroke();\n\n          ctx.fillStyle = isLit ? '#ffffff' : pal.specterDark;\n          ctx.font = `bold ${Math.floor(tileW * 0.38)}px \"JetBrains Mono\", monospace`;\n          ctx.textAlign = 'center';\n          ctx.textBaseline = 'middle';\n          ctx.fillText(isLit ? '\ud83d\uddff\u5b9a' : '\ud83d\udc41\u5371', cx, cy);\n        } else {\n          ctx.fillStyle = isLit ? '#451a03' : '#18181b';\n          ctx.strokeStyle = isLit ? pal.photovoreLit : '#71717a';\n          ctx.lineWidth = 2.2;\n          ctx.beginPath();\n          ctx.arc(cx, cy, tileW * 0.36, 0, Math.PI * 2);\n          ctx.fill();\n          ctx.stroke();\n\n          ctx.fillStyle = isLit ? pal.photovoreLit : '#a1a1aa';\n          ctx.font = `bold ${Math.floor(tileW * 0.38)}px \"JetBrains Mono\", monospace`;\n          ctx.textAlign = 'center';\n          ctx.textBaseline = 'middle';\n          ctx.fillText(isLit ? '\ud83d\udd77\u6012' : '\ud83d\udca4\u7720', cx, cy);\n        }\n        ctx.restore();\n      });\n\n      for (let i = state.ripples.length - 1; i \u003e= 0; i--) {\n        const rp = state.ripples[i];\n        const cx = (rp.c + 0.5) * tileW;\n        const cy = (rp.r + 0.5) * tileH;\n        ctx.save();\n        ctx.strokeStyle = rp.color;\n        ctx.globalAlpha = rp.alpha;\n        ctx.lineWidth = 2;\n        ctx.setLineDash([4, 3]);\n        ctx.beginPath();\n        ctx.arc(cx, cy, rp.radius * tileW, 0, Math.PI * 2);\n        ctx.stroke();\n        ctx.restore();\n      }\n\n      {\n        const px = (state.player.c + 0.5) * tileW;\n        const py = (state.player.r + 0.5) * tileH;\n        ctx.save();\n        ctx.translate(px, py);\n        ctx.rotate(state.player.aimAngle);\n\n        ctx.fillStyle = '#090a0c';\n        ctx.strokeStyle = pal.player;\n        ctx.lineWidth = 2.5;\n        ctx.beginPath();\n        ctx.arc(0, 0, tileW * 0.32, 0, Math.PI * 2);\n        ctx.fill();\n        ctx.stroke();\n\n        ctx.fillStyle = state.player.lightOn ? pal.key : '#52525b';\n        ctx.fillRect(tileW * 0.16, -tileW * 0.1, tileW * 0.25, tileW * 0.2);\n        ctx.restore();\n      }\n    }\n\n    function animationTick() {\n      let needsRedraw = false;\n      if (state.sonarFlashTimer \u003e 0) {\n        state.sonarFlashTimer--;\n        needsRedraw = true;\n      }\n      for (let i = state.ripples.length - 1; i \u003e= 0; i--) {\n        const rp = state.ripples[i];\n        rp.radius += 0.045;\n        rp.alpha -= 0.024;\n        needsRedraw = true;\n        if (rp.alpha \u003c= 0 || rp.radius \u003e= rp.maxRadius) {\n          state.ripples.splice(i, 1);\n        }\n      }\n      if (needsRedraw) {\n        drawScene();\n      }\n      requestAnimationFrame(animationTick);\n    }\n\n    function updateAimFromPointer(clientX, clientY) {\n      if (state.gameOver || state.gameWon) return;\n      const rect = canvas.getBoundingClientRect();\n      const scaleX = canvas.width / rect.width;\n      const scaleY = canvas.height / rect.height;\n      const mx = (clientX - rect.left) * scaleX;\n      const my = (clientY - rect.top) * scaleY;\n      const tileW = canvas.width / state.cols;\n      const tileH = canvas.height / state.rows;\n      const px = (state.player.c + 0.5) * tileW;\n      const py = (state.player.r + 0.5) * tileH;\n      if (Math.hypot(mx - px, my - py) \u003e 6) {\n        state.player.aimAngle = Math.atan2(my - py, mx - px);\n        recalculateLighting();\n        drawScene();\n      }\n    }\n\n    canvas.addEventListener('mousemove', e =\u003e {\n      updateAimFromPointer(e.clientX, e.clientY);\n    });\n\n    canvas.addEventListener('pointerdown', e =\u003e {\n      sound.init();\n      updateAimFromPointer(e.clientX, e.clientY);\n    });\n\n    window.addEventListener('keydown', e =\u003e {\n      if (!document.getElementById('rulesModal').classList.contains('hidden')) {\n        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {\n          document.getElementById('rulesModal').classList.add('hidden');\n        }\n        return;\n      }\n      const key = e.key.toLowerCase();\n      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {\n        e.preventDefault();\n      }\n      if (key === 'w' || key === 'arrowup') tryMovePlayer(-1, 0);\n      else if (key === 's' || key === 'arrowdown') tryMovePlayer(1, 0);\n      else if (key === 'a' || key === 'arrowleft') tryMovePlayer(0, -1);\n      else if (key === 'd' || key === 'arrowright') tryMovePlayer(0, 1);\n      else if (key === 'q') rotateFlashlight(-Math.PI / 6);\n      else if (key === 'e') rotateFlashlight(Math.PI / 6);\n      else if (key === ' ' || key === 'f') toggleFlashlight();\n      else if (key === 'r') triggerSonarPing();\n      else if (key === '.') advanceWorldTurn();\n    });\n\n    document.getElementById('btnMoveUp').addEventListener('click', () =\u003e tryMovePlayer(-1, 0));\n    document.getElementById('btnMoveDown').addEventListener('click', () =\u003e tryMovePlayer(1, 0));\n    document.getElementById('btnMoveLeft').addEventListener('click', () =\u003e tryMovePlayer(0, -1));\n    document.getElementById('btnMoveRight').addEventListener('click', () =\u003e tryMovePlayer(0, 1));\n    document.getElementById('btnWaitStep').addEventListener('click', () =\u003e {\n      addAnomalyLog('\u539f\u5730\u5c4f\u606f\u7b49\u5f85\u4e86\u4e00\u6b65\uff0c\u503e\u542c\u9ed1\u6697\u4e2d\u7684\u52a8\u9759\u2026');\n      advanceWorldTurn();\n    });\n    document.getElementById('btnRotCCW').addEventListener('click', () =\u003e rotateFlashlight(-Math.PI / 4));\n    document.getElementById('btnRotCW').addEventListener('click', () =\u003e rotateFlashlight(Math.PI / 4));\n    document.getElementById('btnToggleLight').addEventListener('click', () =\u003e toggleFlashlight());\n    document.getElementById('btnSonarPing').addEventListener('click', () =\u003e triggerSonarPing());\n    document.getElementById('btnRestartLevel').addEventListener('click', () =\u003e loadLevel(state.levelIndex, state.isProcedural));\n    document.getElementById('btnRandomMaze').addEventListener('click', () =\u003e loadLevel(state.levelIndex, true));\n\n    document.getElementById('btnModalRetry').addEventListener('click', () =\u003e {\n      loadLevel(state.levelIndex, state.isProcedural);\n    });\n    document.getElementById('btnModalNext').addEventListener('click', () =\u003e {\n      if (state.isProcedural) {\n        loadLevel(state.levelIndex, true);\n      } else if (state.levelIndex + 1 \u003c LEVELS.length) {\n        loadLevel(state.levelIndex + 1, false);\n      } else {\n        loadLevel(0, true);\n      }\n    });\n\n    document.getElementById('btnPalette').addEventListener('click', () =\u003e {\n      state.paletteIndex = (state.paletteIndex + 1) % PALETTES.length;\n      document.getElementById('paletteName').textContent = PALETTES[state.paletteIndex].name;\n      drawScene();\n    });\n\n    document.getElementById('btnTickMode').addEventListener('click', () =\u003e {\n      state.realtimeMode = !state.realtimeMode;\n      document.getElementById('tickModeName').textContent = state.realtimeMode ? '\u5b9e\u65f6\u5fc3\u8df3' : '\u56de\u5408\u6b65\u8fdb';\n      if (state.realtimeTimer) {\n        clearInterval(state.realtimeTimer);\n        state.realtimeTimer = null;\n      }\n      if (state.realtimeMode) {\n        addAnomalyLog('\u23f1\ufe0f \u5df2\u5207\u6362\u81f3\u300c\u5b9e\u65f6\u5fc3\u8df3\u6a21\u5f0f\u300d\uff1a\u5373\u4f7f\u4f60\u4e0d\u8d70\u52a8\uff0c\u9ed1\u6697\u4e2d\u7684\u4e16\u754c\u4e5f\u4f1a\u6bcf 1.3 \u79d2\u6f14\u5316\u4e00\u6b21\uff01', 'quantum');\n        state.realtimeTimer = setInterval(() =\u003e {\n          if (!state.gameOver && !state.gameWon && document.getElementById('rulesModal').classList.contains('hidden')) {\n            advanceWorldTurn();\n          }\n        }, 1300);\n      } else {\n        addAnomalyLog('\u23f1\ufe0f \u5df2\u5207\u6362\u81f3\u300c\u56de\u5408\u6b65\u8fdb\u6a21\u5f0f\u300d\uff1a\u6bcf\u5f53\u4f60\u8fc8\u51fa\u4e00\u6b65\u6216\u6309\u7b49\u5f85\uff0c\u65f6\u95f4\u624d\u4f1a\u63a8\u8fdb\u3002');\n      }\n    });\n\n    document.getElementById('btnMute').addEventListener('click', () =\u003e {\n      sound.muted = !sound.muted;\n      document.getElementById('muteStatus').textContent = sound.muted ? '\u5173' : '\u5f00';\n    });\n\n    document.getElementById('btnRulesModal').addEventListener('click', () =\u003e {\n      document.getElementById('rulesModal').classList.remove('hidden');\n    });\n    document.getElementById('btnCloseRules').addEventListener('click', () =\u003e {\n      document.getElementById('rulesModal').classList.add('hidden');\n    });\n    document.getElementById('btnConfirmRules').addEventListener('click', () =\u003e {\n      document.getElementById('rulesModal').classList.add('hidden');\n    });\n\n    window.addEventListener('resize', resizeCanvas);\n    window.addEventListener('load', () =\u003e {\n      loadLevel(0, false);\n      resizeCanvas();\n      requestAnimationFrame(animationTick);\n    });\n  \u003c/script\u003e\n\u003c/body\u003e\n\u003c/html\u003e\n"
+    };
+
+    // =========================================================================
+    // GAMES REGISTRY — Add new games here!
+    // =========================================================================
+    const GAMES = [
+      {
+        id: '1bit-flashlight',
+        code: 'CART-01',
+        title: '1-Bit Flashlight（手电筒怪谈）',
+        subtitle: '量子观测潜行解谜 · 盲区移动法则',
+        category: '1-Bit / 潜行',
+        tags: ['量子观测', '潜行解谜', '1-Bit', '手电光锥'],
+        status: 'playable',
+        file: 'one_bit_flashlight.html',
+        controls: 'WASD / 方向键移动 · 鼠标或 Q/E 旋转手电光束 · Space 开关灯 · R 声呐脉冲',
+        desc: '全黑迷宫里你只有一束窄角手电筒。哭泣雕像只在黑暗盲区中移动、被光照住即石化；量子伪墙在光照时锁死、移开视线才会在黑暗中开门；趋光影怪则在光下暴走、暗处休眠。'
+      },
+      {
+        id: 'uvsu-loop',
+        code: 'CART-02',
+        title: 'UVSU：因果回环追杀',
+        subtitle: '自己追杀自己、再躲开自己的回合博弈',
+        category: '时间循环',
+        tags: ['时间循环', '自己打自己', '回合解谜'],
+        status: 'draft',
+        file: 'uvsu_loop.html',
+        controls: 'WASD 移动跳跃 · 鼠标左键发射弹幕',
+        desc: '【预留卡带槽 #02】第一回合你控制勇者跑到终点；第二回合你扮演恶魔射杀上一回合的自己；第三回合你再次扮演新勇者，在第二回合自己亲手射出的弹幕中闪避逃生。'
+      },
+      {
+        id: 'pause-to-play',
+        code: 'CART-03',
+        title: 'Pause To Play：暂停即跳板',
+        subtitle: '把暂停菜单与音量滑块当成物理踏板',
+        category: '元游戏',
+        tags: ['打破第四面墙', 'UI解谜', '平台跳跃'],
+        status: 'draft',
+        file: 'pause_to_play.html',
+        controls: 'A/D 移动 · Space 跳跃 · ESC 召唤暂停菜单踏板',
+        desc: '【预留卡带槽 #03】按下暂停键不会冻结世界，而是在半空中弹出「继续游戏」「重力滑块」等 UI 面板，踩着菜单按钮跳上高台并拖动滑块改变关卡重力。'
+      },
+      {
+        id: 'orbital-courier',
+        code: 'CART-04',
+        title: 'Orbital Courier：引力弹弓快递',
+        subtitle: '微缩多体星系里的单次点火轨道投递',
+        category: '物理模拟',
+        tags: ['多体引力', '轨道力学', '物理弹射'],
+        status: 'draft',
+        file: 'orbital_courier.html',
+        controls: '拖拽调整发射矢量 · Space 投放微型质量锚',
+        desc: '【预留卡带槽 #04】飞船只剩最后一次点火燃料，利用双星系统的真实引力弹弓效应与实时预测轨迹线，绕过黑洞视界将包裹送入目标行星轨道。'
+      }
+    ];
+
+    const state = {
+      selectedId: '1bit-flashlight',
+      activeCategory: '全部',
+      searchQuery: '',
+      crtEnabled: true,
+      wideMode: false
+    };
+
+    function getCategories() {
+      const set = new Set(['全部']);
+      GAMES.forEach(g => set.add(g.category));
+      return Array.from(set);
+    }
+
+    function renderFilters() {
+      const bar = document.getElementById('categoryFilterBar');
+      bar.innerHTML = '';
+      getCategories().forEach(cat => {
+        const btn = document.createElement('button');
+        const active = state.activeCategory === cat;
+        btn.className = `arcade-btn px-2 py-0.5 text-[11px] ${active ? 'btn-active' : ''}`;
+        btn.textContent = cat;
+        btn.addEventListener('click', () => {
+          state.activeCategory = cat;
+          renderFilters();
+          renderCartridgeList();
+        });
+        bar.appendChild(btn);
+      });
+    }
+
+    function renderCartridgeList() {
+      const list = document.getElementById('cartridgeList');
+      list.innerHTML = '';
+
+      const q = state.searchQuery.trim().toLowerCase();
+      const filtered = GAMES.filter(g => {
+        const matchCat = state.activeCategory === '全部' || g.category === state.activeCategory;
+        const matchQuery =
+          !q ||
+          g.title.toLowerCase().includes(q) ||
+          g.subtitle.toLowerCase().includes(q) ||
+          g.desc.toLowerCase().includes(q) ||
+          g.tags.some(t => t.toLowerCase().includes(q));
+        return matchCat && matchQuery;
+      });
+
+      const playableCount = GAMES.filter(g => g.status === 'playable').length;
+      const draftCount = GAMES.length - playableCount;
+      document.getElementById('statPlayableCount').textContent = String(playableCount);
+      document.getElementById('statDraftCount').textContent = String(draftCount);
+      document.getElementById('rackTotalText').textContent = `共 ${GAMES.length} 枚卡带`;
+
+      filtered.forEach(g => {
+        const card = document.createElement('div');
+        const isSelected = g.id === state.selectedId;
+        const isPlayable = g.status === 'playable';
+        card.className = `arcade-card p-3 cursor-pointer ${isSelected ? 'selected-cart' : ''}`;
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 ${isPlayable ? 'bg-emerald-400 text-black' : 'bg-zinc-800 text-amber-300 border border-amber-500/40'}">
+              ${g.code} · ${isPlayable ? '可游玩' : '待导入槽位'}
+            </span>
+            <span class="text-[10px] text-slate-400 font-mono">games/${g.file}</span>
+          </div>
+          <div class="font-bold text-sm text-white leading-snug">${g.title}</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 line-clamp-2">${g.desc}</div>
+          <div class="flex flex-wrap gap-1 mt-2">
+            ${g.tags.map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-900 border border-slate-700 text-slate-300">${t}</span>`).join('')}
+          </div>
+        `;
+        card.addEventListener('click', () => {
+          selectCartridge(g.id);
+        });
+        list.appendChild(card);
+      });
+    }
+
+    function selectCartridge(id) {
+      const game = GAMES.find(g => g.id === id) || GAMES[0];
+      state.selectedId = game.id;
+      renderCartridgeList();
+
+      document.getElementById('activeCartCode').textContent = game.code;
+      document.getElementById('activeCartCode').className =
+        game.status === 'playable'
+          ? 'px-2 py-0.5 text-xs font-extrabold bg-emerald-400 text-black'
+          : 'px-2 py-0.5 text-xs font-extrabold bg-amber-400 text-black';
+      document.getElementById('activeCartTitle').textContent = game.title;
+      document.getElementById('activeCartSubtitle').textContent = game.subtitle;
+      document.getElementById('infoControls').textContent = game.controls;
+      document.getElementById('infoFilePath').textContent = `games/${game.file}`;
+
+      const tagsEl = document.getElementById('infoTags');
+      tagsEl.innerHTML = game.tags
+        .map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-900 border border-slate-700 text-sky-300">${t}</span>`)
+        .join('');
+
+      const iframe = document.getElementById('arcadeIframe');
+      const overlay = document.getElementById('draftSlotOverlay');
+
+      if (game.status === 'playable') {
+        overlay.classList.add('hidden');
+        loadPlayableGameIntoIframe(game, iframe);
+      } else {
+        overlay.classList.remove('hidden');
+        document.getElementById('draftSlotBadge').textContent = `${game.code} · 预留扩展卡带槽`;
+        document.getElementById('draftSlotTitle').textContent = game.title;
+        document.getElementById('draftSlotDesc').textContent = game.desc;
+        document.getElementById('draftSlotPath').textContent = `games/${game.file}`;
+      }
+    }
+
+    function loadPlayableGameIntoIframe(game, iframe) {
+      // If we have an embedded cartridge cache (like 1-Bit Flashlight), use srcdoc so it works
+      // 100% offline, via file://, and in Canvas preview; if deployed on Netlify with external
+      // games/xxx.html files not in EMBEDDED_CARTRIDGES, load 'games/' + game.file directly!
+      if (EMBEDDED_CARTRIDGES[game.id]) {
+        iframe.removeAttribute('src');
+        iframe.srcdoc = EMBEDDED_CARTRIDGES[game.id];
+      } else {
+        iframe.removeAttribute('srcdoc');
+        iframe.src = 'games/' + game.file;
+      }
+    }
+
+    function updateGeneratorSnippet() {
+      const title = document.getElementById('inpGameTitle').value.trim() || '新创意小游戏';
+      const file = document.getElementById('inpGameFile').value.trim() || 'new_game.html';
+      const tagsRaw = document.getElementById('inpGameTags').value;
+      const tags = tagsRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+      const controls = document.getElementById('inpGameControls').value.trim() || 'WASD / 鼠标';
+      const desc = document.getElementById('inpGameDesc').value.trim() || '自定义创意小游戏。';
+      const nextNum = String(GAMES.length + 1).padStart(2, '0');
+      const obj = {
+        id: file.replace(/\.html$/i, '').replace(/[^a-zA-Z0-9_-]/g, '-'),
+        code: `CART-${nextNum}`,
+        title,
+        subtitle: desc.slice(0, 28),
+        category: tags[0] || '创意实验',
+        tags: tags.length ? tags : ['创意实验'],
+        status: 'playable',
+        file,
+        controls,
+        desc
+      };
+      document.getElementById('generatedSnippet').textContent = JSON.stringify(obj, null, 2);
+      return obj;
+    }
+
+    // Wire UI Events
+    document.getElementById('searchInput').addEventListener('input', e => {
+      state.searchQuery = e.target.value;
+      renderCartridgeList();
+    });
+
+    document.getElementById('btnReloadCart').addEventListener('click', () => {
+      selectCartridge(state.selectedId);
+    });
+
+    document.getElementById('btnToggleWide').addEventListener('click', () => {
+      state.wideMode = !state.wideMode;
+      const sidebar = document.getElementById('cartridgeSidebar');
+      const cabinet = document.getElementById('cabinetSection');
+      const btn = document.getElementById('btnToggleWide');
+      if (state.wideMode) {
+        sidebar.classList.add('hidden');
+        cabinet.className = 'lg:col-span-12 w-full flex flex-col gap-3';
+        btn.textContent = '◧ 显示卡带列表';
+      } else {
+        sidebar.classList.remove('hidden');
+        cabinet.className = 'lg:col-span-8 w-full flex flex-col gap-3';
+        btn.textContent = '⛶ 宽屏街机模式';
+      }
+    });
+
+    document.getElementById('btnOpenStandalone').addEventListener('click', () => {
+      const game = GAMES.find(g => g.id === state.selectedId) || GAMES[0];
+      if (EMBEDDED_CARTRIDGES[game.id]) {
+        const blob = new Blob([EMBEDDED_CARTRIDGES[game.id]], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } else {
+        window.open('games/' + game.file, '_blank');
+      }
+    });
+
+    document.getElementById('btnToggleCRT').addEventListener('click', () => {
+      state.crtEnabled = !state.crtEnabled;
+      document.getElementById('crtOverlay').classList.toggle('hidden', !state.crtEnabled);
+      document.getElementById('crtStateText').textContent = state.crtEnabled ? '开' : '关';
+    });
+
+    document.getElementById('btnBackToCart01').addEventListener('click', () => {
+      selectCartridge('1bit-flashlight');
+    });
+
+    document.getElementById('btnCustomizeSlot').addEventListener('click', () => {
+      updateGeneratorSnippet();
+      document.getElementById('addCartModal').classList.remove('hidden');
+    });
+
+    // Add Cartridge Modal
+    document.getElementById('btnOpenAddModal').addEventListener('click', () => {
+      updateGeneratorSnippet();
+      document.getElementById('addCartModal').classList.remove('hidden');
+    });
+    document.getElementById('btnCloseAddModal').addEventListener('click', () => {
+      document.getElementById('addCartModal').classList.add('hidden');
+    });
+    ['inpGameTitle', 'inpGameFile', 'inpGameTags', 'inpGameControls', 'inpGameDesc'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateGeneratorSnippet);
+    });
+    document.getElementById('btnCopySnippet').addEventListener('click', () => {
+      const text = document.getElementById('generatedSnippet').textContent;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      document.getElementById('btnCopySnippet').textContent = '✅ 已复制!';
+      setTimeout(() => {
+        document.getElementById('btnCopySnippet').textContent = '📋 复制代码';
+      }, 1500);
+    });
+    document.getElementById('btnPreviewAddCart').addEventListener('click', () => {
+      const obj = updateGeneratorSnippet();
+      obj.status = 'draft';
+      GAMES.push(obj);
+      document.getElementById('addCartModal').classList.add('hidden');
+      renderFilters();
+      selectCartridge(obj.id);
+    });
+
+    // Deploy Guide Modal
+    document.getElementById('btnOpenDeployModal').addEventListener('click', () => {
+      document.getElementById('deployModal').classList.remove('hidden');
+    });
+    document.getElementById('btnCloseDeployModal').addEventListener('click', () => {
+      document.getElementById('deployModal').classList.add('hidden');
+    });
+    document.getElementById('btnConfirmDeployModal').addEventListener('click', () => {
+      document.getElementById('deployModal').classList.add('hidden');
+    });
+
+    window.addEventListener('load', () => {
+      renderFilters();
+      selectCartridge('1bit-flashlight');
+    });
+  </script>
+</body>
+</html>
